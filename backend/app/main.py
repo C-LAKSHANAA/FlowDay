@@ -58,8 +58,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:4200",
         "http://localhost:5000",
-        # GitHub Pages — replace YOUR_GITHUB_USERNAME with your actual username
-        "https://YOUR_GITHUB_USERNAME.github.io",
+        "https://c-lakshanaa.github.io",
     ],
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
