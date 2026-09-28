@@ -167,13 +167,17 @@ def solve_schedule(schedule: DaySchedule) -> DaySchedule:
         all_intervals.append(interval_var)
         task_vars[task.id] = (start_var, is_scheduled)
 
-        # Weighted objective term — use effective_duration for tie-breaking
-        # so an overrunning task doesn't get unfairly penalised vs a fresh task
+        # Weighted objective term:
+        # 1. Primary: total priority (W_PRIORITY = 1,000,000)
+        # 2. Early-start preference: higher priority tasks get scheduled EARLIER in the day (- start_var * task.priority * 10)
+        # 3. Secondary: shorter duration tie-breaker (- effective_duration * 100)
+        # 4. Tertiary: deterministic id rank (- id_rank * 1)
         objective_terms.append(
-            (task.priority  * _W_PRIORITY
+            (task.priority * _W_PRIORITY
              - task.effective_duration * _W_DURATION
              - id_rank[task.id] * _W_ID)
             * is_scheduled
+            - start_var * task.priority * 10
         )
 
     # -----------------------------------------------------------------------
@@ -847,10 +851,49 @@ def trigger_disruption(
             "flexible_tasks": all_tasks,
         })
 
+    elif disruption_type == "event_reschedule":
+        event_id       = disruption.get("event_id")
+        new_start_time = disruption.get("new_start_time")
+        new_end_time   = disruption.get("new_end_time")
+
+        if event_id is None or new_start_time is None or new_end_time is None:
+            raise ValueError(
+                "'event_reschedule' disruption requires 'event_id', 'new_start_time', and 'new_end_time'."
+            )
+        if new_end_time <= new_start_time:
+            raise ValueError(
+                f"new_end_time ({new_end_time}) must be after new_start_time ({new_start_time})."
+            )
+
+        updated_events = []
+        found = False
+        for event in schedule.fixed_events:
+            if event.id == event_id:
+                updated_events.append(event.model_copy(update={
+                    "start_time": new_start_time,
+                    "end_time": new_end_time,
+                }))
+                found = True
+            else:
+                updated_events.append(event)
+
+        if not found:
+            raise ValueError(f"No FixedEvent with id='{event_id}' found in schedule.fixed_events.")
+
+        tasks_to_solve = [
+            t.model_copy(update={"start_time": None, "status": "backlog"})
+            for t in schedule.flexible_tasks
+        ]
+        disrupted_schedule = schedule.model_copy(update={
+            "fixed_events": updated_events,
+            "flexible_tasks": tasks_to_solve,
+        })
+        return solve_schedule(disrupted_schedule)
+
     else:
         raise ValueError(
             f"Unknown disruption type: '{disruption_type}'. "
-            "Supported types: 'event_overrun', 'task_overrun', "
+            "Supported types: 'event_overrun', 'event_reschedule', 'task_overrun', "
             "'event_cancelled', 'task_early_finish', 'day_shrink'."
         )
 
@@ -895,6 +938,18 @@ def generate_explanation(
                     break
             suffix = f" until {fmt(new_end_time)}" if new_end_time else ""
             return f"{event_title} ran{suffix}"
+
+        if disruption_type == "event_reschedule":
+            event_id       = disruption.get("event_id", "an event")
+            new_start_time = disruption.get("new_start_time")
+            new_end_time   = disruption.get("new_end_time")
+            event_title = event_id
+            for evt in list(new_schedule.fixed_events) + list(old_schedule.fixed_events):
+                if evt.id == event_id:
+                    event_title = evt.title
+                    break
+            times_str = f" to [{fmt(new_start_time)}–{fmt(new_end_time)}]" if new_start_time and new_end_time else ""
+            return f"{event_title} was rescheduled{times_str}"
 
         if disruption_type == "event_cancelled":
             event_id = disruption.get("event_id", "an event")
@@ -959,9 +1014,18 @@ def generate_explanation(
         if old_scheduled and new_scheduled:
             if old_task.start_time != new_task.start_time:
                 # Task moved to a different slot
+                dur = new_task.actual_duration or new_task.duration
+                end_time = new_task.start_time + dur  # type: ignore[operator]
+                deadline_msg = ""
+                if new_task.deadline is not None:
+                    if end_time > new_task.deadline:
+                        deadline_msg = f" ⚠️ (Exceeds deadline of {fmt(new_task.deadline)}!)"
+                    else:
+                        deadline_msg = f" (Deadline: {fmt(new_task.deadline)})"
+
                 lines.append(
                     f"{new_task.title} moved from {fmt(old_task.start_time)} "  # type: ignore[arg-type]
-                    f"to {fmt(new_task.start_time)} because {_because(new_task.title)}."  # type: ignore[arg-type]
+                    f"to {fmt(new_task.start_time)}{deadline_msg} because {_because(new_task.title)}."  # type: ignore[arg-type]
                 )
 
         elif old_scheduled and not new_scheduled:

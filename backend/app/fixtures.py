@@ -144,204 +144,26 @@ def get_overflow_schedule() -> DaySchedule:
 
 def get_dummy_week_schedule() -> WeekSchedule:
     """
-    Returns a WeekSchedule for the week of 2026-09-28 (Mon) – 2026-10-04 (Sun).
-
-    Structure per day type
-    ----------------------
-    Mon–Fri  6:00 AM–11:00 PM  2 fixed events (class/meeting + dinner)
-             work/study tasks, progressively lighter towards Friday
-    Saturday 8:00 AM–11:00 PM  1 fixed event (gym), leisure tasks
-    Sunday   9:00 AM–10:00 PM  1 fixed event (family lunch), very light tasks
+    Returns a clean, empty WeekSchedule for the week of 2026-09-28 (Mon) – 2026-10-04 (Sun).
+    All days start empty with 0 fixed events and 0 flexible tasks so the user has a clean slate.
     """
-
-    # ------------------------------------------------------------------
-    # Monday 2026-09-28 — heavy study day
-    # ------------------------------------------------------------------
-    mon = DaySchedule(
-        date="2026-09-28",
-        day_start=360,   # 6:00 AM
-        day_end=1380,    # 11:00 PM
-        fixed_events=[
-            FixedEvent(id="mon-evt-001", title="Lecture",
-                       start_time=540, end_time=660),    # 9:00–11:00 AM
-            FixedEvent(id="mon-evt-002", title="Dinner",
-                       start_time=1140, end_time=1200),  # 7:00–8:00 PM
-        ],
-        flexible_tasks=[
-            FlexibleTask(id="mon-t-001", title="Review Monday lecture notes",
-                         duration=45, priority=9, deadline=780),   # by 1 PM
-            FlexibleTask(id="mon-t-002", title="Complete problem set",
-                         duration=120, priority=8, deadline=1080),  # by 6 PM
-            FlexibleTask(id="mon-t-003", title="Read assigned chapter",
-                         duration=60, priority=6),
-            FlexibleTask(id="mon-t-004", title="Reply to professor email",
-                         duration=15, priority=7, deadline=1020),   # by 5 PM
-            FlexibleTask(id="mon-t-005", title="Gym workout",
-                         duration=60, priority=4),
-        ],
-    )
-
-    # ------------------------------------------------------------------
-    # Tuesday 2026-09-29 — lab + group work
-    # ------------------------------------------------------------------
-    tue = DaySchedule(
-        date="2026-09-29",
-        day_start=360,
-        day_end=1380,
-        fixed_events=[
-            FixedEvent(id="tue-evt-001", title="Lab Session",
-                       start_time=600, end_time=750),    # 10:00 AM–12:30 PM
-            FixedEvent(id="tue-evt-002", title="Dinner",
-                       start_time=1140, end_time=1200),
-        ],
-        flexible_tasks=[
-            FlexibleTask(id="tue-t-001", title="Write lab report intro",
-                         duration=45, priority=9, deadline=1020),
-            FlexibleTask(id="tue-t-002", title="Group project research",
-                         duration=90, priority=8),
-            FlexibleTask(id="tue-t-003", title="Flashcard review",
-                         duration=30, priority=5, deadline=840),    # by 2 PM
-            FlexibleTask(id="tue-t-004", title="Tidy notes from last week",
-                         duration=30, priority=3),
-            FlexibleTask(id="tue-t-005", title="Exercise — short run",
-                         duration=45, priority=4),
-        ],
-    )
-
-    # ------------------------------------------------------------------
-    # Wednesday 2026-09-30 — mid-week, lighter class load
-    # ------------------------------------------------------------------
-    wed = DaySchedule(
-        date="2026-09-30",
-        day_start=360,
-        day_end=1380,
-        fixed_events=[
-            FixedEvent(id="wed-evt-001", title="Tutorial",
-                       start_time=660, end_time=750),    # 11:00 AM–12:30 PM
-            FixedEvent(id="wed-evt-002", title="Dinner",
-                       start_time=1140, end_time=1200),
-        ],
-        flexible_tasks=[
-            FlexibleTask(id="wed-t-001", title="Assignment draft — section 2",
-                         duration=90, priority=9, deadline=1080),
-            FlexibleTask(id="wed-t-002", title="Read research paper",
-                         duration=60, priority=6),
-            FlexibleTask(id="wed-t-003", title="Reply to emails",
-                         duration=20, priority=7, deadline=900),    # by 3 PM
-            FlexibleTask(id="wed-t-004", title="Work on side project",
-                         duration=60, priority=3),
-            FlexibleTask(id="wed-t-005", title="Meditation / break",
-                         duration=20, priority=2),
-        ],
-    )
-
-    # ------------------------------------------------------------------
-    # Thursday 2026-10-01 — presentation prep day
-    # ------------------------------------------------------------------
-    thu = DaySchedule(
-        date="2026-10-01",
-        day_start=360,
-        day_end=1380,
-        fixed_events=[
-            FixedEvent(id="thu-evt-001", title="Study Group",
-                       start_time=780, end_time=900),    # 1:00–3:00 PM
-            FixedEvent(id="thu-evt-002", title="Dinner",
-                       start_time=1140, end_time=1200),
-        ],
-        flexible_tasks=[
-            FlexibleTask(id="thu-t-001", title="Finalise presentation slides",
-                         duration=90, priority=10, deadline=1080),
-            FlexibleTask(id="thu-t-002", title="Practise presentation",
-                         duration=45, priority=9, deadline=1140),
-            FlexibleTask(id="thu-t-003", title="Complete lab report",
-                         duration=60, priority=8, deadline=1020),
-            FlexibleTask(id="thu-t-004", title="Review classmate's draft",
-                         duration=30, priority=5),
-            FlexibleTask(id="thu-t-005", title="Gym workout",
-                         duration=60, priority=3),
-        ],
-    )
-
-    # ------------------------------------------------------------------
-    # Friday 2026-10-02 — presentation day, lighter afternoon
-    # ------------------------------------------------------------------
-    fri = DaySchedule(
-        date="2026-10-02",
-        day_start=360,
-        day_end=1380,
-        fixed_events=[
-            FixedEvent(id="fri-evt-001", title="Group Presentation",
-                       start_time=600, end_time=720),    # 10:00 AM–12:00 PM
-            FixedEvent(id="fri-evt-002", title="Dinner",
-                       start_time=1140, end_time=1200),
-        ],
-        flexible_tasks=[
-            FlexibleTask(id="fri-t-001", title="Submit final assignment",
-                         duration=30, priority=10, deadline=840),   # by 2 PM
-            FlexibleTask(id="fri-t-002", title="Catch up on reading",
-                         duration=60, priority=5),
-            FlexibleTask(id="fri-t-003", title="Plan next week",
-                         duration=30, priority=6),
-            FlexibleTask(id="fri-t-004", title="Watch lecture recording",
-                         duration=45, priority=4),
-            FlexibleTask(id="fri-t-005", title="Social / wind-down",
-                         duration=60, priority=2),
-        ],
-    )
-
-    # ------------------------------------------------------------------
-    # Saturday 2026-10-03 — rest and leisure, later start
-    # ------------------------------------------------------------------
-    sat = DaySchedule(
-        date="2026-10-03",
-        day_start=480,   # 8:00 AM
-        day_end=1380,    # 11:00 PM
-        fixed_events=[
-            FixedEvent(id="sat-evt-001", title="Gym",
-                       start_time=540, end_time=660),    # 9:00–11:00 AM
-        ],
-        flexible_tasks=[
-            FlexibleTask(id="sat-t-001", title="Grocery shopping",
-                         duration=60, priority=8, deadline=780),    # by 1 PM
-            FlexibleTask(id="sat-t-002", title="Meal prep",
-                         duration=60, priority=6),
-            FlexibleTask(id="sat-t-003", title="Read for pleasure",
-                         duration=90, priority=4),
-            FlexibleTask(id="sat-t-004", title="Work on side project",
-                         duration=90, priority=5),
-            FlexibleTask(id="sat-t-005", title="Watch a film",
-                         duration=120, priority=2),
-        ],
-    )
-
-    # ------------------------------------------------------------------
-    # Sunday 2026-10-04 — rest day, latest start
-    # ------------------------------------------------------------------
-    sun = DaySchedule(
-        date="2026-10-04",
-        day_start=540,   # 9:00 AM
-        day_end=1320,    # 10:00 PM
-        fixed_events=[
-            FixedEvent(id="sun-evt-001", title="Family Lunch",
-                       start_time=720, end_time=840),    # 12:00–2:00 PM
-        ],
-        flexible_tasks=[
-            FlexibleTask(id="sun-t-001", title="Light review of week ahead",
-                         duration=30, priority=7, deadline=1020),
-            FlexibleTask(id="sun-t-002", title="Journaling",
-                         duration=20, priority=5),
-            FlexibleTask(id="sun-t-003", title="Walk outside",
-                         duration=45, priority=6),
-            FlexibleTask(id="sun-t-004", title="Call a friend",
-                         duration=30, priority=4),
-            FlexibleTask(id="sun-t-005", title="Read for pleasure",
-                         duration=60, priority=3),
-        ],
-    )
-
+    dates = [
+        "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01",
+        "2026-10-02", "2026-10-03", "2026-10-04"
+    ]
+    days = [
+        DaySchedule(
+            date=d,
+            day_start=0,
+            day_end=1440,
+            fixed_events=[],
+            flexible_tasks=[],
+        )
+        for d in dates
+    ]
     return WeekSchedule(
         week_start_date="2026-09-28",
-        days=[mon, tue, wed, thu, fri, sat, sun],
+        days=days,
     )
 
 

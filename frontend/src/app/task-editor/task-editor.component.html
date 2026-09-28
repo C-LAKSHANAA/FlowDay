@@ -6,89 +6,148 @@
     <button class="editor-close" (click)="cancel.emit()" aria-label="Close">✕</button>
   </div>
 
-  <!-- ── Natural-language parse ───────────────────── -->
-  <div class="parse-section">
-    <label class="parse-label">Describe your task</label>
-    <div class="parse-row">
-      <input
-        class="parse-input"
-        type="text"
-        [(ngModel)]="parseText"
-        placeholder="e.g. call mom urgent today, 15 min"
-        (keydown.enter)="parseDescription()"
-        autocomplete="off"
-      />
-      <button
-        class="btn-parse"
-        (click)="parseDescription()"
-        [disabled]="parsing || !parseText.trim()"
-        title="Parse description into fields"
-      >{{ parsing ? '…' : '→' }}</button>
+  <div class="editor-body">
+
+    <!-- ── Natural-language parse ───────────────────── -->
+    <div class="parse-section">
+      <label class="parse-label">Describe your task</label>
+      <div class="parse-row">
+        <input
+          class="parse-input"
+          type="text"
+          [(ngModel)]="parseText"
+          placeholder="e.g. call mom urgent today, 15 min"
+          (keydown.enter)="parseDescription()"
+          autocomplete="off"
+        />
+        <button
+          class="btn-parse"
+          (click)="parseDescription()"
+          [disabled]="parsing || !parseText.trim()"
+          title="Parse description into fields"
+        >{{ parsing ? '…' : '→' }}</button>
+      </div>
+      <p class="parse-hint">Press → to auto-fill the form below from your description.</p>
+      <p class="parse-error" *ngIf="parseError">{{ parseError }}</p>
     </div>
-    <p class="parse-hint">Press → to auto-fill the form below from your description.</p>
-    <p class="parse-error" *ngIf="parseError">{{ parseError }}</p>
-  </div>
 
-  <div class="divider" aria-hidden="true"></div>
+    <div class="divider" aria-hidden="true"></div>
 
-  <!-- ── Structured fields ────────────────────────── -->
-  <div class="field-row">
-    <label>Title</label>
-    <input type="text" [(ngModel)]="title" placeholder="Task title" autocomplete="off" />
-  </div>
-
-  <div class="field-row">
-    <label>Category</label>
-    <input type="text" [(ngModel)]="category"
-           placeholder="e.g. reading, exercise"
-           (ngModelChange)="onCategoryOrDurationChange()" />
-  </div>
-
-  <div class="field-row">
-    <label>Duration <span class="unit">(min)</span></label>
-    <input type="number" [(ngModel)]="duration" min="1" max="480"
-           (ngModelChange)="onCategoryOrDurationChange()" />
-  </div>
-
-  <!-- Duration suggestion chip -->
-  <div class="suggestion-chip" *ngIf="showSuggestion" role="status">
-    <span class="suggestion-icon">💡</span>
-    <span class="suggestion-text">{{ prediction!.message }}</span>
-    <button class="btn-accept" (click)="acceptSuggestion()">Use {{ prediction!.predicted_duration }} min</button>
-    <button class="btn-dismiss-suggestion" (click)="dismissSuggestion()" aria-label="Dismiss suggestion">✕</button>
-  </div>
-  <div class="suggestion-loading" *ngIf="predicting">
-    <span>Checking past data…</span>
-  </div>
-
-  <div class="field-row">
-    <label>Priority <span class="unit">(1–10)</span></label>
-    <input type="number" [(ngModel)]="priority" min="1" max="10" />
-  </div>
-
-  <div class="field-row">
-    <label>Depends on</label>
-    <select [(ngModel)]="dependsOn">
-      <option value="">— none —</option>
-      <option *ngFor="let t of eligibleDependencies" [value]="t.id">{{ t.title }}</option>
-    </select>
-  </div>
-
-  <details class="constraints-section">
-    <summary>Optional constraints</summary>
+    <!-- ── Structured fields ────────────────────────── -->
     <div class="field-row">
-      <label>Deadline</label>
-      <input type="time" [(ngModel)]="deadlineInput" step="300" />
+      <label>Title</label>
+      <input type="text" [(ngModel)]="title" placeholder="Task title" autocomplete="off" />
     </div>
+
     <div class="field-row">
-      <label>Earliest start</label>
-      <input type="time" [(ngModel)]="earliestStartInput" step="300" />
+      <label>Category</label>
+      <input type="text" [(ngModel)]="category"
+             placeholder="e.g. reading, assignment"
+             (ngModelChange)="onCategoryOrDurationChange()" />
     </div>
+
     <div class="field-row">
-      <label>Latest end</label>
-      <input type="time" [(ngModel)]="latestEndInput" step="300" />
+      <label>Duration <span class="unit">(min)</span></label>
+      <input type="number" [(ngModel)]="duration" min="1" max="480"
+             (ngModelChange)="onCategoryOrDurationChange()" />
     </div>
-  </details>
+
+    <!-- Duration suggestion chip -->
+    <div class="suggestion-chip" *ngIf="showSuggestion" role="status">
+      <span class="suggestion-icon">💡</span>
+      <span class="suggestion-text">{{ prediction!.message }}</span>
+      <button class="btn-accept" (click)="acceptSuggestion()">Use {{ prediction!.predicted_duration }} min</button>
+      <button class="btn-dismiss-suggestion" (click)="dismissSuggestion()" aria-label="Dismiss suggestion">✕</button>
+    </div>
+    <div class="suggestion-loading" *ngIf="predicting">
+      <span>Checking past data…</span>
+    </div>
+
+    <!-- Priority Selector (High / Medium / Low) -->
+    <div class="field-row">
+      <label>Priority</label>
+      <div class="priority-options">
+        <button type="button"
+                class="prio-btn prio-high"
+                [class.active]="priorityLevel === 'high'"
+                (click)="priorityLevel = 'high'">
+          🔴 High
+        </button>
+        <button type="button"
+                class="prio-btn prio-med"
+                [class.active]="priorityLevel === 'med'"
+                (click)="priorityLevel = 'med'">
+          🟡 Medium
+        </button>
+        <button type="button"
+                class="prio-btn prio-low"
+                [class.active]="priorityLevel === 'low'"
+                (click)="priorityLevel = 'low'">
+          🟢 Low
+        </button>
+      </div>
+    </div>
+
+    <div class="field-row schedule-mode-row">
+      <label>Schedule Mode</label>
+      <div class="mode-options">
+        <button type="button"
+                class="mode-btn"
+                [class.active]="scheduleMode === 'auto'"
+                (click)="scheduleMode = 'auto'">
+          ⚡ Flexible (Auto)
+        </button>
+        <button type="button"
+                class="mode-btn"
+                [class.active]="scheduleMode === 'specific'"
+                (click)="scheduleMode = 'specific'">
+          📌 Fixed Time
+        </button>
+      </div>
+    </div>
+
+    <div class="field-row" *ngIf="scheduleMode === 'specific'">
+      <label>Start Time</label>
+      <div class="time-input-group">
+        <input type="time" [(ngModel)]="startTimeInput" step="300" (ngModelChange)="pastTimeError = ''" />
+        <button type="button" class="btn-now" (click)="setCurrentTime()" title="Set to current system time">
+          Now ({{ systemTimeString }})
+        </button>
+      </div>
+    </div>
+
+    <div class="past-time-alert" *ngIf="isPastTime || pastTimeError">
+      ⚠️ <span>Selected time has already passed according to system clock!</span>
+      <button type="button" class="btn-fix-time" (click)="setCurrentTime()">Set to Now</button>
+    </div>
+
+    <!-- Direct Deadline Input -->
+    <div class="field-row">
+      <label>Deadline <span class="unit">(optional)</span></label>
+      <input type="time" [(ngModel)]="deadlineInput" step="300" placeholder="Must complete before" />
+    </div>
+
+    <div class="field-row">
+      <label>Depends on</label>
+      <select [(ngModel)]="dependsOn">
+        <option value="">— none —</option>
+        <option *ngFor="let t of eligibleDependencies" [value]="t.id">{{ t.title }}</option>
+      </select>
+    </div>
+
+    <details class="constraints-section">
+      <summary>Advanced constraints</summary>
+      <div class="field-row">
+        <label>Earliest start</label>
+        <input type="time" [(ngModel)]="earliestStartInput" step="300" />
+      </div>
+      <div class="field-row">
+        <label>Latest end</label>
+        <input type="time" [(ngModel)]="latestEndInput" step="300" />
+      </div>
+    </details>
+
+  </div><!-- /editor-body -->
 
   <div class="editor-actions">
     <button class="btn-save" (click)="submit()" [disabled]="!title.trim() || duration <= 0">

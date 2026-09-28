@@ -20,6 +20,7 @@ export interface FlexibleTask {
   is_deadline_today: boolean;
   actual_duration: number | null;
   depends_on: string | null;
+  is_fixed?: boolean;
 }
 
 export interface DaySchedule {
@@ -43,9 +44,10 @@ export interface EventOverrunDisruption {
 
 export interface WeekDisruption {
   day_date: string;
-  type: 'event_overrun';
+  type: 'event_overrun' | 'event_reschedule' | 'event_cancelled';
   event_id: string;
-  new_end_time: number;
+  new_start_time?: number | null;
+  new_end_time?: number | null;
 }
 
 // A positioned block rendered inside a day column
@@ -56,10 +58,15 @@ export interface CalendarBlock {
   end_time: number;
   kind: 'fixed' | 'task';
   priority?: number;
+  is_fixed?: boolean;
   depends_on?: string | null;
+  deadline?: number | null;
+  deadlineAtRisk?: boolean;  // true if end_time > deadline
   // CSS values, computed from time
   topPct: number;
   heightPct: number;
+  leftPct?: number;
+  widthPct?: number;
 }
 
 // A dependency arrow connecting two task blocks within the same day column

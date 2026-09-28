@@ -21,7 +21,7 @@ Endpoints:
     GET  /docs                    — Swagger UI
 """
 
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -84,10 +84,14 @@ class WeekDisruption(BaseModel):
     """Disruption scoped to a specific day within a WeekSchedule."""
 
     day_date: str = Field(..., description="ISO date of the day to disrupt, e.g. '2026-09-30'")
-    type: Literal["event_overrun"]
-    event_id: str = Field(..., description="ID of the FixedEvent that overran")
-    new_end_time: int = Field(
-        ..., ge=1, le=1440,
+    type: Literal["event_overrun", "event_reschedule", "event_cancelled"] = "event_overrun"
+    event_id: str = Field(..., description="ID of the FixedEvent that overran or rescheduled")
+    new_start_time: Optional[int] = Field(
+        default=None, ge=0, lt=1440,
+        description="New start time in minutes since midnight",
+    )
+    new_end_time: Optional[int] = Field(
+        default=None, ge=1, le=1440,
         description="New end time in minutes since midnight",
     )
 
@@ -255,20 +259,11 @@ def schedule_week_disrupt(disruption: WeekDisruption):
 
         target_day = week.days[target_index]
 
-        updated_events = [
-            e.model_copy(update={"end_time": disruption.new_end_time})
-            if e.id == disruption.event_id else e
-            for e in target_day.fixed_events
-        ]
-        try:
-            validate_fixed_events(updated_events)
-        except ValueError as exc:
-            raise _validation_error(exc) from exc
-
         day_disruption = {
-            "type":         disruption.type,
-            "event_id":     disruption.event_id,
-            "new_end_time": disruption.new_end_time,
+            "type":           disruption.type,
+            "event_id":       disruption.event_id,
+            "new_start_time": disruption.new_start_time,
+            "new_end_time":   disruption.new_end_time,
         }
         updated_day = trigger_disruption(target_day, day_disruption)
         explanations = generate_explanation(target_day, updated_day, day_disruption)
