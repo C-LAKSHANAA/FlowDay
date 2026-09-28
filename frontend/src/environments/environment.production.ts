@@ -2,5 +2,5 @@
 // e.g. https://flowday-backend.onrender.com
 export const environment = {
   production: true,
-  apiUrl: 'https://YOUR_BACKEND_URL_HERE',
+  apiUrl: 'https://flowday-mhkf.onrender.com/',
 };

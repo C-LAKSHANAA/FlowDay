@@ -55,7 +55,12 @@ app = FastAPI(title="FlowDay", version="0.1.0")
 # ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "http://localhost:5000"],
+    allow_origins=[
+        "http://localhost:4200",
+        "http://localhost:5000",
+        # GitHub Pages — replace YOUR_GITHUB_USERNAME with your actual username
+        "https://YOUR_GITHUB_USERNAME.github.io",
+    ],
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
