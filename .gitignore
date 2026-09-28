@@ -1,17 +1,89 @@
-# Python
+# ── Python ──────────────────────────────────────────────────
+# Virtual environments
 backend/.venv/
 backend/venv/
-backend/__pycache__/
-backend/.pytest_cache/
-*.pyc
+.venv/
+venv/
+env/
 
-# Angular / Node
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+
+# Test / coverage
+backend/.pytest_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.coveragerc
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+*.whl
+
+# ── ML model artefacts ──────────────────────────────────────
+backend/data/duration_model.joblib
+
+# ── Completion log (local dev data — not for version control)
+# Remove this line if you want the log committed (e.g. for demos)
+backend/data/completion_log.json
+
+# ── FastAPI / uvicorn ────────────────────────────────────────
+*.log
+
+# ── Angular / Node ───────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/
+frontend/.angular/cache/
 
-# Environment files
+# Angular build cache
+.angular/
+
+# npm / yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
+
+# ── Environment & secrets ────────────────────────────────────
 .env
+.env.*
 *.env
+!.env.example
+
+# Never commit API keys
+secrets.json
+secrets.yaml
+
+# ── OS & editor noise ────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encdata
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
 # VS Code
 .vscode/
+!.vscode/extensions.json
+
+# JetBrains / PyCharm
+.idea/
+*.iml
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
