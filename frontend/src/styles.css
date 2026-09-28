@@ -1,13 +1,57 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* ── Reset & base ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Palette */
+  --color-bg:          #f1f5f9;
+  --color-surface:     #ffffff;
+  --color-border:      #e2e8f0;
+  --color-border-soft: #f1f5f9;
+  --color-text:        #1e293b;
+  --color-text-muted:  #64748b;
+  --color-text-faint:  #94a3b8;
+
+  /* Brand accents */
+  --color-fixed:       #3b82f6;
+  --color-fixed-bg:    #dbeafe;
+  --color-fixed-text:  #1e3a8a;
+  --color-task:        #10b981;
+  --color-task-bg:     #d1fae5;
+  --color-task-text:   #064e3b;
+  --color-dep:         #f59e0b;
+  --color-missed:      #dc2626;
+  --color-missed-bg:   #fff1f2;
+  --color-missed-border:#fca5a5;
+  --color-shifted:     #f59e0b;
+  --color-shifted-bg:  #fef3c7;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius:    6px;
+  --radius-lg: 10px;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow:    0 4px 16px rgba(0,0,0,0.10);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.14);
+
+  /* Typography */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-base: 13px;
 }
 
+html { font-size: var(--font-size-base); }
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 14px;
-  background: #f5f5f5;
-  color: #222;
-  padding: 24px;
+  font-family: var(--font);
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }

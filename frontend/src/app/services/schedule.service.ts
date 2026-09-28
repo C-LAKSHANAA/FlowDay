@@ -6,7 +6,9 @@ import {
   DaySchedule,
   DisruptDayResponse,
   DisruptWeekResponse,
+  DurationPrediction,
   EventOverrunDisruption,
+  ParsedTask,
   WeekDisruption,
   WeekSchedule,
 } from '../models/schedule.models';
@@ -39,5 +41,17 @@ export class ScheduleService {
 
   checkSchedule(req: CheckRequest): Observable<DisruptDayResponse> {
     return this.http.post<DisruptDayResponse>(`${API}/schedule/check`, req);
+  }
+
+  predictDuration(category: string, estimatedDuration: number): Observable<DurationPrediction> {
+    const params = new URLSearchParams({
+      category,
+      estimated_duration: String(estimatedDuration),
+    });
+    return this.http.get<DurationPrediction>(`${API}/tasks/predict-duration?${params}`);
+  }
+
+  parseTask(text: string): Observable<ParsedTask> {
+    return this.http.post<ParsedTask>(`${API}/tasks/parse`, { text });
   }
 }

@@ -1,0 +1,10 @@
+[
+  {
+    "task_id": "mon-t-001",
+    "task_title": "Review Monday lecture notes",
+    "estimated_duration": 45,
+    "actual_duration": 55,
+    "category": "study",
+    "completed_at": "2026-09-28T05:11:17.697195+00:00"
+  }
+]

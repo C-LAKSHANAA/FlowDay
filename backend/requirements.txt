@@ -3,3 +3,5 @@ uvicorn
 ortools
 pydantic
 pytest
+scikit-learn
+joblib

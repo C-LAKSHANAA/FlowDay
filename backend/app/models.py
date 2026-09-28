@@ -209,3 +209,55 @@ class DisruptWeekResponse(BaseModel):
         default_factory=list,
         description="Plain-English lines describing what changed in the disrupted day.",
     )
+
+
+class TaskCompletionLog(BaseModel):
+    """
+    A single log entry written when a flexible task is marked complete.
+    Stored in backend/data/completion_log.json for later analysis
+    (e.g. estimating how long similar tasks actually take).
+    """
+
+    task_id:            str
+    task_title:         str
+    estimated_duration: int = Field(
+        ..., gt=0,
+        description="Original duration from the task definition (minutes).",
+    )
+    actual_duration:    int = Field(
+        ..., gt=0,
+        description="How long the task actually took (minutes).",
+    )
+    category:           str = Field(
+        default="",
+        description="Optional task category, e.g. 'reading', 'assignment'.",
+    )
+    completed_at:       str = Field(
+        default="",
+        description="ISO 8601 datetime string, set automatically on write.",
+    )
+
+    @property
+    def overrun_minutes(self) -> int:
+        """Positive if task ran longer than estimated, negative if early."""
+        return self.actual_duration - self.estimated_duration
+
+
+class TaskCompleteRequest(BaseModel):
+    """
+    Request body for POST /tasks/complete.
+
+    The caller provides the task id (to look up estimated duration from the
+    current schedule) and the actual duration the task took.
+    An optional category label can be included for later filtering.
+    """
+
+    task_id:         str = Field(..., description="ID of the FlexibleTask being completed.")
+    actual_duration: int = Field(
+        ..., gt=0,
+        description="How long the task actually took (minutes).",
+    )
+    category:        str = Field(
+        default="",
+        description="Optional category tag, e.g. 'reading', 'exercise'.",
+    )

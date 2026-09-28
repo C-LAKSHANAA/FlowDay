@@ -7,14 +7,18 @@ Run with:
     uvicorn app.main:app --reload --port 5000
 
 Endpoints:
-    GET  /                      — health check
-    GET  /schedule/demo         — solve the dummy fixture, return a DaySchedule
-    GET  /schedule/week/demo    — solve the dummy week fixture, return a WeekSchedule
-    POST /schedule/solve        — validate + solve a user-submitted DaySchedule
-    POST /schedule/check        — auto-detect overruns at current_time; returns updated schedule
-    POST /schedule/disrupt      — apply a disruption; returns schedule + explanations
-    POST /schedule/week/disrupt — apply a disruption to one day; returns week + explanations
-    GET  /docs                  — Swagger UI
+    GET  /                        — health check
+    GET  /schedule/demo           — solve the dummy fixture, return a DaySchedule
+    GET  /schedule/week/demo      — solve the dummy week fixture, return a WeekSchedule
+    POST /schedule/solve          — validate + solve a user-submitted DaySchedule
+    POST /schedule/check          — auto-detect overruns at current_time
+    POST /schedule/disrupt        — apply a disruption; returns schedule + explanations
+    POST /schedule/week/disrupt   — apply a disruption to one day; returns week + explanations
+    POST /tasks/complete          — log a completed task
+    GET  /tasks/completion-log    — return all completion log entries
+    GET  /tasks/predict-duration  — ML-based duration prediction
+    POST /tasks/parse             — parse free-text into structured task fields
+    GET  /docs                    — Swagger UI
 """
 
 from typing import Literal
@@ -24,7 +28,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.fixtures import get_dummy_schedule, get_dummy_week_schedule
-from app.models import DaySchedule, DisruptDayResponse, DisruptWeekResponse, WeekSchedule
+from app.models import (
+    DaySchedule,
+    DisruptDayResponse,
+    DisruptWeekResponse,
+    TaskCompleteRequest,
+    TaskCompletionLog,
+    WeekSchedule,
+)
+from app.persistence import append_completion, read_all_completions
+from app.duration_model import predict_duration
+from app.task_parser import parse_task_text
 from app.solver import (
     detect_and_apply_overruns,
     generate_explanation,
@@ -265,3 +279,160 @@ def schedule_week_disrupt(disruption: WeekDisruption):
         raise
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Task completion endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/tasks/complete", response_model=TaskCompletionLog, tags=["tasks"])
+def task_complete(body: TaskCompleteRequest):
+    """
+    Mark a flexible task as complete and log the actual vs estimated duration.
+
+    The endpoint looks up the task's ``estimated_duration`` by searching the
+    current solved demo week schedule for a task matching ``body.task_id``.
+
+    Steps
+    -----
+    1. Solve the demo week to get the current schedule.
+    2. Find the FlexibleTask whose ``id == body.task_id``.
+    3. Build a ``TaskCompletionLog`` entry with estimated and actual durations.
+    4. Append it to ``backend/data/completion_log.json``.
+    5. Return the written log entry (including the auto-set ``completed_at``).
+
+    Raises
+    ------
+    404  Task id not found in the current demo week schedule.
+    """
+    week = solve_week(get_dummy_week_schedule())
+
+    # Search all days for the task
+    found_task = None
+    for day in week.days:
+        for t in day.flexible_tasks:
+            if t.id == body.task_id:
+                found_task = t
+                break
+        if found_task:
+            break
+
+    if found_task is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No FlexibleTask with id='{body.task_id}' found in the current schedule.",
+        )
+
+    entry = TaskCompletionLog(
+        task_id=            found_task.id,
+        task_title=         found_task.title,
+        estimated_duration= found_task.duration,
+        actual_duration=    body.actual_duration,
+        category=           body.category,
+    )
+
+    return append_completion(entry)
+
+
+@app.get("/tasks/completion-log", response_model=list[TaskCompletionLog], tags=["tasks"])
+def get_completion_log():
+    """
+    Return all task completion log entries in chronological order.
+    """
+    return read_all_completions()
+
+
+@app.get("/tasks/predict-duration", tags=["tasks"])
+def get_predicted_duration(
+    category: str = "",
+    estimated_duration: int = 60,
+):
+    """
+    Return a predicted actual duration for a task based on past log data.
+
+    Query parameters
+    ----------------
+    category           : Task category string (e.g. "reading", "assignment").
+                         Empty string is valid — treated as uncategorised.
+    estimated_duration : The user's own estimate in minutes.  Used as the
+                         primary feature and as the cold-start fallback.
+
+    Response
+    --------
+    {
+        "predicted_duration": int,   // minutes
+        "is_model_based": bool,      // false = cold-start fallback
+        "message": str               // human-readable label for the UI
+    }
+
+    When no model has been trained yet (cold start), returns
+    ``estimated_duration`` unchanged with ``is_model_based: false``.
+    """
+    from app.duration_model import MODEL_FILE
+
+    predicted = predict_duration(
+        category=category,
+        estimated_duration=estimated_duration,
+    )
+
+    is_model_based = MODEL_FILE.exists()
+
+    if is_model_based and predicted != estimated_duration:
+        message = (
+            f"Suggested: {predicted} min, based on past similar tasks"
+            + (f" in '{category}'" if category else "")
+            + "."
+        )
+    elif is_model_based:
+        message = f"No adjustment needed — {predicted} min matches your past average."
+    else:
+        message = "No past data yet — using your estimate as-is."
+
+    return {
+        "predicted_duration": predicted,
+        "is_model_based":     is_model_based,
+        "message":            message,
+    }
+
+
+class TaskParseRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=500,
+                      description="Free-text task description to parse.")
+
+
+@app.post("/tasks/parse", tags=["tasks"])
+def task_parse(body: TaskParseRequest):
+    """
+    Parse a free-text task description into structured FlexibleTask fields.
+
+    Uses an LLM (OpenAI) when ``OPENAI_API_KEY`` env var is set; falls back
+    to a lightweight heuristic parser so the endpoint always works without
+    an API key.
+
+    The response is a suggestion only — the frontend pre-fills the task
+    creation form with these values and the user must confirm before the
+    task is added to the schedule.
+
+    Returns a dict with these fields (null when not inferable):
+        title, duration, deadline, priority, category,
+        earliest_start, latest_end, parser_used
+
+    Raises HTTP 422 if the LLM returns malformed JSON.
+    """
+    parser_used = "llm" if __import__("os").environ.get("OPENAI_API_KEY") else "heuristic"
+
+    try:
+        result = parse_task_text(body.text)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not parse task description: {exc}",
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+        ) from exc
+
+    result["parser_used"] = parser_used
+    return result

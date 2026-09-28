@@ -89,6 +89,25 @@ export interface CheckRequest {
   current_time: number;  // minutes since midnight
 }
 
+// Response from GET /tasks/predict-duration
+export interface DurationPrediction {
+  predicted_duration: number;
+  is_model_based: boolean;
+  message: string;
+}
+
+// Response from POST /tasks/parse
+export interface ParsedTask {
+  title:          string | null;
+  duration:       number | null;
+  deadline:       number | null;
+  priority:       number | null;
+  category:       string | null;
+  earliest_start: number | null;
+  latest_end:     number | null;
+  parser_used:    string;
+}
+
 // Unified row type for the simple list view (ScheduleViewComponent)
 export interface ScheduleRow {
   id: string;
