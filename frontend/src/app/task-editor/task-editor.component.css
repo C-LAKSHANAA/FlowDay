@@ -1,0 +1,120 @@
+.task-editor {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 18px 20px;
+  width: 300px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  font-size: 13px;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.editor-header strong { flex: 1; font-size: 0.95rem; }
+
+.editor-day {
+  font-size: 0.72rem;
+  color: #888;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.editor-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #999;
+  padding: 2px 4px;
+  line-height: 1;
+}
+
+.editor-close:hover { color: #333; }
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.field-row label {
+  width: 110px;
+  font-size: 0.82rem;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.field-row input,
+.field-row select {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: #fafafa;
+}
+
+.field-row input:focus,
+.field-row select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: #fff;
+}
+
+/* Dependency select — highlight when a dep is chosen */
+.field-row select option:not([value=""]) { font-weight: 500; }
+
+.constraints-section {
+  margin: 10px 0;
+  border: 1px solid #eee;
+  border-radius: 5px;
+  padding: 6px 10px;
+}
+
+.constraints-section summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: #666;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.btn-save {
+  flex: 1;
+  padding: 7px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-save:hover:not(:disabled) { background: #059669; }
+.btn-save:disabled { background: #6ee7b7; cursor: not-allowed; }
+
+.btn-cancel {
+  padding: 7px 14px;
+  background: #f3f4f6;
+  color: #444;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.btn-cancel:hover { background: #e5e7eb; }

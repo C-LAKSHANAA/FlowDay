@@ -1,0 +1,76 @@
+<div class="schedule-view">
+
+  <h1>FlowDay — {{ schedule?.date ?? 'Loading…' }}</h1>
+
+  <!-- Loading / error states -->
+  <p class="state-msg" *ngIf="loading">Loading schedule…</p>
+  <p class="error-msg" *ngIf="error">{{ error }}</p>
+
+  <!-- ── Schedule list ─────────────────────────────────────── -->
+  <section class="schedule-list" *ngIf="rows.length">
+    <div
+      *ngFor="let row of rows"
+      class="row"
+      [class.fixed]="row.kind === 'fixed'"
+      [class.task]="row.kind === 'task'"
+      [class.shifted]="changedIds.has(row.id)"
+    >
+      <span class="time">{{ fmt(row.start_time) }} – {{ fmt(row.end_time) }}</span>
+      <span class="title">{{ row.title }}</span>
+      <span class="badge" *ngIf="row.kind === 'fixed'">event</span>
+      <span class="badge task-badge" *ngIf="row.kind === 'task'">
+        task · p={{ row.priority }}
+      </span>
+      <span class="shifted-label" *ngIf="changedIds.has(row.id)">⟳ shifted</span>
+    </div>
+  </section>
+
+  <!-- ── Backlog ───────────────────────────────────────────── -->
+  <section class="backlog" *ngIf="backlogTasks().length">
+    <h2>Backlog</h2>
+    <div class="row backlog-row" *ngFor="let t of backlogTasks()">
+      <span class="time">—</span>
+      <span class="title">{{ t.title }}</span>
+      <span class="badge task-badge">task · p={{ t.priority }}</span>
+    </div>
+  </section>
+
+  <!-- ── Disruption form ───────────────────────────────────── -->
+  <section class="disrupt-form" *ngIf="schedule">
+    <h2>Trigger Disruption</h2>
+    <p class="form-hint">
+      Extend a fixed event's end time — the solver will reflow all tasks around it.
+    </p>
+
+    <div class="form-row">
+      <label for="eventSelect">Fixed event</label>
+      <select id="eventSelect" [(ngModel)]="selectedEventId">
+        <option *ngFor="let e of fixedEvents" [value]="e.id">
+          {{ e.title }} (ends {{ fmt(e.end_time) }})
+        </option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="newEndTime">New end time</label>
+      <input
+        id="newEndTime"
+        type="time"
+        [(ngModel)]="newEndTimeInput"
+        step="300"
+      />
+    </div>
+
+    <div class="form-row">
+      <button
+        (click)="submitDisruption()"
+        [disabled]="disrupting || !selectedEventId || !newEndTimeInput"
+      >
+        {{ disrupting ? 'Reflowing…' : 'Apply Disruption' }}
+      </button>
+    </div>
+
+    <p class="error-msg" *ngIf="disruptError">{{ disruptError }}</p>
+  </section>
+
+</div>

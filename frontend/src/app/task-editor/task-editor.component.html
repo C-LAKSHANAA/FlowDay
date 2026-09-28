@@ -1,0 +1,58 @@
+<div class="task-editor" (click)="$event.stopPropagation()">
+  <div class="editor-header">
+    <strong>{{ editTask ? 'Edit Task' : 'New Task' }}</strong>
+    <span class="editor-day">{{ dayDate }}</span>
+    <button class="editor-close" (click)="cancel.emit()" aria-label="Cancel">✕</button>
+  </div>
+
+  <div class="field-row">
+    <label>Title</label>
+    <input type="text" [(ngModel)]="title" placeholder="Task title" autocomplete="off" />
+  </div>
+
+  <div class="field-row">
+    <label>Duration (min)</label>
+    <input type="number" [(ngModel)]="duration" min="1" max="480" />
+  </div>
+
+  <div class="field-row">
+    <label>Priority (1–10)</label>
+    <input type="number" [(ngModel)]="priority" min="1" max="10" />
+  </div>
+
+  <div class="field-row">
+    <label>Depends on</label>
+    <select [(ngModel)]="dependsOn">
+      <option value="">— none —</option>
+      <option *ngFor="let t of eligibleDependencies" [value]="t.id">
+        {{ t.title }}
+      </option>
+    </select>
+  </div>
+
+  <details class="constraints-section">
+    <summary>Optional constraints</summary>
+
+    <div class="field-row">
+      <label>Deadline</label>
+      <input type="time" [(ngModel)]="deadlineInput" step="300" />
+    </div>
+
+    <div class="field-row">
+      <label>Earliest start</label>
+      <input type="time" [(ngModel)]="earliestStartInput" step="300" />
+    </div>
+
+    <div class="field-row">
+      <label>Latest end</label>
+      <input type="time" [(ngModel)]="latestEndInput" step="300" />
+    </div>
+  </details>
+
+  <div class="editor-actions">
+    <button class="btn-save" (click)="submit()" [disabled]="!title.trim() || duration <= 0">
+      {{ editTask ? 'Save changes' : 'Add task' }}
+    </button>
+    <button class="btn-cancel" (click)="cancel.emit()">Cancel</button>
+  </div>
+</div>

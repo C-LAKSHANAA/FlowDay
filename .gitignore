@@ -1,0 +1,17 @@
+# Python
+backend/.venv/
+backend/venv/
+backend/__pycache__/
+backend/.pytest_cache/
+*.pyc
+
+# Angular / Node
+frontend/node_modules/
+frontend/dist/
+
+# Environment files
+.env
+*.env
+
+# VS Code
+.vscode/

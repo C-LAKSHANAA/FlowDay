@@ -1,0 +1,181 @@
+<div class="calendar-root" (click)="closeAll()">
+
+  <h1 *ngIf="week">Week of {{ week.week_start_date }}</h1>
+  <p class="state-msg" *ngIf="loading">Loading week schedule…</p>
+  <p class="error-msg"  *ngIf="error">{{ error }}</p>
+
+  <!-- ── Explanation toast ──────────────────────────────────── -->
+  <div class="toast" *ngIf="toastVisible" (click)="$event.stopPropagation()">
+    <div class="toast-header">
+      <span class="toast-title">What changed</span>
+      <button class="toast-close" (click)="dismissToast()" aria-label="Dismiss">✕</button>
+    </div>
+    <ul class="toast-list">
+      <li *ngFor="let line of explanations">{{ line }}</li>
+    </ul>
+  </div>
+
+  <!-- ── Passive auto-update banner ────────────────────────── -->
+  <div class="banner" *ngIf="banner" role="status" aria-live="polite">
+    <span class="banner-icon">🔄</span>
+    <div class="banner-body">
+      <span class="banner-heading">Schedule auto-updated</span>
+      <ul class="banner-list">
+        <li *ngFor="let line of banner.lines">{{ line }}</li>
+      </ul>
+    </div>
+    <button class="banner-close" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+  </div>
+
+  <!-- ── Calendar grid ──────────────────────────────────────── -->
+  <div class="calendar-grid" *ngIf="!loading && !error">
+
+    <!-- Hour axis -->
+    <div class="hour-axis">
+      <div *ngFor="let h of hourLabels" class="hour-label" [style.top.%]="h.topPct">
+        {{ h.label }}
+      </div>
+    </div>
+
+    <!-- Background hour lines -->
+    <div class="grid-lines" aria-hidden="true">
+      <div *ngFor="let h of hourLabels" class="grid-line" [style.top.%]="h.topPct"></div>
+    </div>
+
+    <!-- Day columns -->
+    <div class="day-column" *ngFor="let col of dayColumns">
+
+      <div class="col-header">
+        <span class="day-name">{{ col.dayName }}</span>
+        <span class="day-date">{{ shortDate(col.date) }}</span>
+        <button
+          class="btn-add-task"
+          (click)="$event.stopPropagation(); openTaskEditor(col.date)"
+          title="Add task to {{ col.dayName }}"
+        >+</button>
+      </div>
+
+      <div class="col-body">
+
+        <!-- Dependency arrows — SVG overlay -->
+        <svg
+          *ngIf="col.arrows.length > 0"
+          class="dep-arrows"
+          aria-hidden="true"
+          preserveAspectRatio="none"
+          viewBox="0 0 100 100"
+        >
+          <defs>
+            <marker id="arrowhead" markerWidth="6" markerHeight="6"
+                    refX="3" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#f59e0b" />
+            </marker>
+          </defs>
+          <line
+            *ngFor="let arrow of col.arrows"
+            [attr.x1]="50"
+            [attr.y1]="arrow.fromMidPct"
+            [attr.x2]="50"
+            [attr.y2]="arrow.toTopPct"
+            stroke="#f59e0b"
+            stroke-width="1.5"
+            stroke-dasharray="3 2"
+            marker-end="url(#arrowhead)"
+          />
+        </svg>
+
+        <!-- Event / task blocks -->
+        <div
+          *ngFor="let block of col.blocks"
+          class="block"
+          [class.block-fixed]="block.kind === 'fixed'"
+          [class.block-task]="block.kind === 'task'"
+          [class.block-has-dep]="block.kind === 'task' && block.depends_on"
+          [class.block-shifted]="changedBlockIds.has(block.id)"
+          [class.block-clickable]="block.kind === 'fixed'"
+          [style.top.%]="block.topPct"
+          [style.height.%]="block.heightPct"
+          [attr.title]="block.kind === 'fixed'
+            ? 'Click to trigger disruption: ' + block.title
+            : block.title + ' ' + fmt(block.start_time) + '–' + fmt(block.end_time)"
+          (click)="block.kind === 'fixed' && openDisruptPanel($event, col, block)"
+          (dblclick)="block.kind === 'task' && openTaskEditor(col.date, null)"
+        >
+          <span class="block-title">{{ block.title }}</span>
+          <span class="block-time">{{ fmt(block.start_time) }}–{{ fmt(block.end_time) }}</span>
+          <span class="block-hint" *ngIf="block.kind === 'fixed'">click to disrupt</span>
+        </div>
+
+      </div><!-- /col-body -->
+    </div><!-- /day-column -->
+
+  </div><!-- /calendar-grid -->
+
+  <!-- ── Disruption popover ─────────────────────────────────── -->
+  <div class="panel-backdrop" *ngIf="panel" (click)="closePanel()"></div>
+  <div class="disrupt-panel" *ngIf="panel" (click)="$event.stopPropagation()">
+    <div class="panel-header">
+      <strong>Trigger Disruption</strong>
+      <span class="panel-day">{{ panel.dayDate }}</span>
+      <button class="panel-close" (click)="closePanel()" aria-label="Close">✕</button>
+    </div>
+    <div class="panel-row">
+      <label>Fixed event</label>
+      <select [(ngModel)]="panel.eventId">
+        <option *ngFor="let e of panel.fixedEvents" [value]="e.id">
+          {{ e.title }} (ends {{ fmt(e.end_time) }})
+        </option>
+      </select>
+    </div>
+    <div class="panel-row">
+      <label>New end time</label>
+      <input type="time" [(ngModel)]="panel.newEndTimeInput" step="300" />
+    </div>
+    <div class="panel-row">
+      <button class="btn-disrupt"
+        (click)="submitDisruption()"
+        [disabled]="panel.submitting || !panel.newEndTimeInput">
+        {{ panel.submitting ? 'Reflowing…' : 'Apply' }}
+      </button>
+    </div>
+    <p class="panel-error" *ngIf="panel.error">{{ panel.error }}</p>
+  </div>
+
+  <!-- ── Task editor modal ──────────────────────────────────── -->
+  <div class="panel-backdrop" *ngIf="taskEditorDay" (click)="closeTaskEditor()"></div>
+  <div class="task-editor-wrapper" *ngIf="taskEditorDay" (click)="$event.stopPropagation()">
+    <app-task-editor
+      [editTask]="taskEditorTask"
+      [dayTasks]="editorDayTasks()"
+      [dayDate]="taskEditorDay!"
+      (save)="onTaskSave($event)"
+      (cancel)="closeTaskEditor()"
+    />
+  </div>
+
+  <!-- ── Backlog ────────────────────────────────────────────── -->
+  <section class="backlog-section" *ngIf="allBacklog().length > 0">
+    <h2>
+      Backlog
+      <span class="missed-badge" *ngIf="missedCount() > 0">
+        {{ missedCount() }} missed today
+      </span>
+    </h2>
+    <div class="backlog-list">
+      <div
+        *ngFor="let entry of allBacklog()"
+        class="backlog-item"
+        [class.backlog-missed]="entry.missed"
+      >
+        <span class="backlog-day">{{ entry.day }}</span>
+        <span class="backlog-label-missed" *ngIf="entry.missed">MISSED</span>
+        <span class="backlog-title">{{ entry.task.title }}</span>
+        <span class="backlog-dep" *ngIf="entry.task.depends_on">
+          ← {{ dependsOnTitle(entry.task) }}
+        </span>
+        <span class="backlog-meta">p={{ entry.task.priority }} · {{ entry.task.duration }}min</span>
+      </div>
+    </div>
+  </section>
+
+</div>

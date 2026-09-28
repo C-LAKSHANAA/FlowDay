@@ -1,0 +1,178 @@
+.schedule-view {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #111;
+}
+
+h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 24px 0 10px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Schedule rows ─────────────────────────────────────────── */
+.schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #fff;
+  border-left: 4px solid transparent;
+  transition: background 0.3s ease;
+}
+
+.row.fixed {
+  border-left-color: #5b8dee;
+}
+
+.row.task {
+  border-left-color: #43c59e;
+}
+
+.row.backlog-row {
+  border-left-color: #ccc;
+  opacity: 0.65;
+}
+
+/* Highlight rows that shifted after a disruption */
+.row.shifted {
+  background: #fffbe6;
+  border-left-color: #f5a623;
+  animation: flash 2s ease forwards;
+}
+
+@keyframes flash {
+  0%   { background: #fff3c4; }
+  60%  { background: #fff3c4; }
+  100% { background: #fff; }
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: #555;
+  min-width: 110px;
+  flex-shrink: 0;
+}
+
+.title {
+  flex: 1;
+  font-weight: 500;
+}
+
+.badge {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #e8eeff;
+  color: #3a5bd9;
+  flex-shrink: 0;
+}
+
+.task-badge {
+  background: #e4f7f1;
+  color: #1f8c6b;
+}
+
+.shifted-label {
+  font-size: 0.72rem;
+  color: #b07d00;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ── Backlog ───────────────────────────────────────────────── */
+.backlog {
+  margin-top: 8px;
+}
+
+/* ── Disruption form ───────────────────────────────────────── */
+.disrupt-form {
+  margin-top: 32px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.form-hint {
+  font-size: 0.82rem;
+  color: #666;
+  margin-bottom: 14px;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.form-row label {
+  width: 110px;
+  font-size: 0.85rem;
+  color: #444;
+  flex-shrink: 0;
+}
+
+.form-row select,
+.form-row input[type="time"] {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  background: #fafafa;
+}
+
+.form-row button {
+  padding: 8px 20px;
+  background: #5b8dee;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.form-row button:hover:not(:disabled) {
+  background: #3a6fd8;
+}
+
+.form-row button:disabled {
+  background: #aac2f5;
+  cursor: not-allowed;
+}
+
+/* ── States ────────────────────────────────────────────────── */
+.state-msg {
+  color: #666;
+  font-style: italic;
+  margin: 16px 0;
+}
+
+.error-msg {
+  color: #c0392b;
+  background: #fdecea;
+  padding: 8px 12px;
+  border-radius: 5px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
