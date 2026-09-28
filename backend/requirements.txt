@@ -5,3 +5,4 @@ pydantic
 pytest
 scikit-learn
 joblib
+httpx2
