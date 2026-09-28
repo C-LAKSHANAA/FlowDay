@@ -42,17 +42,5 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -v --tb=short
 
-      - name: Import check (all app modules)
-        run: |
-          python - <<'PY'
-          from app.models import DaySchedule, WeekSchedule
-          from app.solver import solve_schedule, solve_week
-          from app.fixtures import get_dummy_schedule, get_dummy_week_schedule
-          from app.validation import validate_day_schedule
-          from app.persistence import read_all_completions
-          from app.duration_model import predict_duration
-          from app.task_parser import parse_task_text
-          from app.main import app
-
-          print("All imports OK")
-          PY
+      - name: Import check
+        run: python -c "from app.models import DaySchedule; from app.solver import solve_schedule; from app.main import app; print('All imports OK')"

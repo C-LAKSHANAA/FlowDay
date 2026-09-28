@@ -1,16 +1,12 @@
 name: PR Check
 
-# Runs both backend and frontend CI on every PR to main/develop,
-# regardless of which files changed — ensures the full stack is always
-# green before merging.
-
 on:
   pull_request:
     branches: [main, develop]
 
 jobs:
   backend:
-    name: Backend tests (Python 3.11)
+    name: Backend tests
     runs-on: ubuntu-latest
 
     defaults:
@@ -33,7 +29,7 @@ jobs:
         run: python -m pytest tests/ -v --tb=short
 
   frontend:
-    name: Frontend build (Node 22)
+    name: Frontend build
     runs-on: ubuntu-latest
 
     defaults:
@@ -61,11 +57,12 @@ jobs:
     needs: [backend, frontend]
     if: always()
     steps:
-      - name: Check all jobs passed
+      - name: Verify all jobs passed
         run: |
-          if [ "${{ needs.backend.result }}" != "success" ] || \
-             [ "${{ needs.frontend.result }}" != "success" ]; then
-            echo "One or more checks failed"
+          backend="${{ needs.backend.result }}"
+          frontend="${{ needs.frontend.result }}"
+          if [ "$backend" != "success" ] || [ "$frontend" != "success" ]; then
+            echo "backend=$backend frontend=$frontend"
             exit 1
           fi
           echo "All checks passed"

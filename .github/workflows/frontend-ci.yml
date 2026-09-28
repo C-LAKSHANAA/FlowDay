@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    name: Angular build & lint
+    name: Angular build
     runs-on: ubuntu-latest
 
     defaults:
@@ -34,8 +34,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (development)
+      - name: Build development
         run: npx ng build --configuration development
 
-      - name: Build (production)
+      - name: Build production
         run: npx ng build --configuration production
