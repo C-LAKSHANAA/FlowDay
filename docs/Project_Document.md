@@ -2,6 +2,8 @@
 
 > This document covers every component, every design decision, every data flow, and every scenario in the FlowDay project from first principles to live demo. After reading this you should be able to answer any question about what exists, why it exists, how it connects, and what happens in every edge case.
 
+> **Last updated:** September 29, 2026. Reflects the complete FlowDay codebase including all sprint updates: Groq LLM integration, deadline warning system, backlog scheduling, date validation, mini calendar sidebar, localStorage persistence, and high-priority enforcement.
+
 ---
 
 ## Table of Contents
@@ -14,18 +16,20 @@
 6. [Disruption System — Real-Time Adaptation](#6-disruption-system--real-time-adaptation)
 7. [Validation Layer](#7-validation-layer)
 8. [Fixtures — Hardcoded Scenarios](#8-fixtures--hardcoded-scenarios)
-9. [Persistence — Completion Log](#9-persistence--completion-log)
+9. [Persistence — Completion Log & localStorage](#9-persistence--completion-log--localstorage)
 10. [Duration Prediction — ML Layer](#10-duration-prediction--ml-layer)
 11. [Task Parser — Natural Language Input](#11-task-parser--natural-language-input)
 12. [The FastAPI Backend — Endpoints A to Z](#12-the-fastapi-backend--endpoints-a-to-z)
 13. [The Angular Frontend — Components A to Z](#13-the-angular-frontend--components-a-to-z)
 14. [The Weekly Calendar — Visual Design](#14-the-weekly-calendar--visual-design)
-15. [Notifications — Two Separate Channels](#15-notifications--two-separate-channels)
-16. [The Polling System — Automatic Detection](#16-the-polling-system--automatic-detection)
-17. [GitHub Actions — CI/CD](#17-github-actions--cicd)
-18. [The Test Suite](#18-the-test-suite)
-19. [Every "What If" Scenario](#19-every-what-if-scenario)
-20. [Demo Script / Checklist](#20-demo-script--checklist)
+15. [Deadline Warning System](#15-deadline-warning-system)
+16. [Backlog Scheduling — Smart Slot Allocation](#16-backlog-scheduling--smart-slot-allocation)
+17. [Notifications — Toast System](#17-notifications--toast-system)
+18. [The Polling System — Clock Sync](#18-the-polling-system--clock-sync)
+19. [GitHub Actions — CI/CD](#19-github-actions--cicd)
+20. [The Test Suite](#20-the-test-suite)
+21. [Every "What If" Scenario](#21-every-what-if-scenario)
+22. [Demo Script / Checklist](#22-demo-script--checklist)
 
 ---
 
@@ -384,17 +388,24 @@ Loads the joblib artefact. If the file doesn't exist: returns `round(estimated_d
 
 `backend/app/task_parser.py` converts free-text descriptions into `FlexibleTask`-shaped dicts.
 
+### Environment Setup
+
+The backend loads a `backend/.env` file automatically via `python-dotenv` (`load_dotenv()` is called at the top of `main.py` before any other imports). The relevant env var is `GROQ_API_KEY`.
+
 ### Two Parse Paths
 
-**LLM path (OPENAI_API_KEY set):**
-Sends the text to `gpt-4o-mini` with a strict system prompt that says "return ONLY valid JSON, no markdown, no explanation." The JSON response is cleaned (strips code fences), the first JSON object is extracted via regex, then validated field-by-field: integer fields coerced to `int` or set to null; string fields stripped. Unknown fields silently dropped.
+**LLM path (`GROQ_API_KEY` set):**
+Sends the text to the **Groq** chat completions API using model `qwen/qwen3.8-27b` with a strict system prompt: "return ONLY valid JSON, no markdown, no explanation." Parameters: `temperature=0`, `max_tokens=256`. The JSON response is cleaned (strips code fences), the first JSON object is extracted via regex, then validated field-by-field: integer fields coerced to `int` or set to null; string fields stripped. Unknown fields silently dropped.
 
-**Heuristic path (default, no API key):**
+The `groq` Python package must be installed (`pip install groq`). If the package is missing, a `RuntimeError` is raised and the endpoint returns HTTP 503.
+
+**Heuristic path (default, no `GROQ_API_KEY`):**
 Regex-based extraction:
+- Time range: patterns like `"from 11am to 5pm"`, `"11:00am-11:30am"` → sets `earliest_start`, `latest_end`, and computes `duration`
 - Duration: patterns like `\d+\s*(?:hour|hr|h)\b` and `\d+\s*(?:min(?:ute)?s?)\b`
-- Deadline: "today" → 1380 (23:00); "by/before/due/at HH:MM" → parsed and converted
-- Priority: keyword map (urgent→9, important→7, low→3, etc.)
-- Category: keyword-to-category map (read→reading, workout→exercise, email→admin, etc.)
+- Deadline: "today" → 1380 (23:00); "by/before/due/at HH:MM" → parsed and converted; "tomorrow" → null
+- Priority: keyword map (urgent→9, asap→9, critical→10, important→7, high priority→8, low→3, whenever→2)
+- Category: keyword-to-category map (read/chapter/book→reading, exercise/workout/gym/run→exercise, email/reply/call/meeting→admin, study/exam/lecture/homework/assignment→study, code/program/develop→coding, write/essay/report→writing)
 - Title: the full input text, truncated to 80 characters
 
 ### Output Schema
@@ -417,7 +428,7 @@ Fields the parser cannot confidently determine are null — never guessed. The f
 
 ## 12. The FastAPI Backend — Endpoints A to Z
 
-All endpoints are in `backend/app/main.py`. CORS is configured to allow `localhost:4200` (Angular dev server) and `localhost:5000` (backend itself for browser testing).
+All endpoints are in `backend/app/main.py`. CORS is configured to allow `localhost:4200` (Angular dev server), `localhost:5000` (backend itself for browser testing), and `https://c-lakshanaa.github.io` (GitHub Pages deployment).
 
 | Method | Path | Purpose | Returns |
 |---|---|---|---|
@@ -466,104 +477,173 @@ The single HTTP boundary between the Angular app and the backend. Every backend 
 **Why centralise HTTP in a service?** Any URL change (e.g. pointing to a production backend) is one change in one file. Any authentication header added in future is one change. Components stay focused on display logic.
 
 ### `WeeklyCalendarComponent`
-The main view. Implements `OnInit` (loads the week) and `OnDestroy` (stops the polling subscription and clears timers).
+The main view. Implements `OnInit` (loads the week) and `OnDestroy` (clears timers).
 
 Key state:
-- `week: WeekSchedule | null` — the raw data from the backend
+- `week: WeekSchedule | null` — the raw data (loaded from `localStorage` first, then built empty)
 - `dayColumns: DayColumn[]` — derived display data: blocks, backlog, dependency arrows
 - `changedBlockIds: Set<string>` — ids of blocks that shifted in the last disruption (drives CSS animation)
-- `explanations: string[]`, `toastVisible` — manual disruption toast state
-- `banner: {lines} | null` — auto-detected overrun passive notification
+- `explanations: string[]`, `toastVisible` — disruption toast state
 - `panel: DisruptionPanel | null` — disruption panel state
 - `taskEditorDay`, `taskEditorTask` — task editor state
+- `currentMin`, `currentTimeString`, `currentTimeTopPct` — system clock, updated every 30 s
+- `todayDateStr`, `selectedDateStr` — ISO date strings for today and selected week
+- `miniCalendarDays`, `miniMonthTitle`, `activeMiniMonth` — mini month calendar sidebar state
+
+**localStorage persistence.** All schedule data is stored in `localStorage` under key `flowday_week_schedule_v2`. The format is a `Record<string, DaySchedule>` keyed by ISO date string. `loadWeekForDate()` reads localStorage first; if a date is missing it creates an empty `DaySchedule`. `saveMasterStorage()` writes back every day of the current week after any change (solve, delete, disruption).
 
 **`buildColumn(day, index)`** converts a `DaySchedule` into display-ready data:
 1. Fixed events → `CalendarBlock` with `kind: 'fixed'`
-2. Scheduled tasks → `CalendarBlock` with `kind: 'task'`
+2. Scheduled tasks → `CalendarBlock` with `kind: 'task'`, including `deadlineAtRisk`, `deadlineWarning`, and `minutesUntilDeadline` fields
 3. Backlog tasks → kept in `backlog[]` for the backlog section
 4. Dependency arrows → computed from `depends_on` references between scheduled blocks in the same column
 
-**`toPosition(startMin, endMin)`** converts time intervals to `topPct` / `heightPct` percentages within the grid's visible range (6 AM to 11 PM = 1020 minutes). `topPct = (start - 360) / 1020 × 100`. This is pure CSS — no pixel calculations, no layout dependencies.
+**`toPosition(startMin, endMin)`** converts time intervals to `topPct` / `heightPct` percentages within the full 24-hour grid (0–1440 minutes). `topPct = (start − 0) / 1440 × 100`. Minimum `heightPct` is 2.5% so very short tasks remain clickable.
 
-**`startPolling()`** creates an RxJS `interval(60_000)` subscription that:
-1. Picks the next day (rotating via `pollDayIndex % 7`)
-2. Gets current wall-clock time as `h * 60 + m`
-3. Calls `checkSchedule()`
-4. On response: if `explanations` is non-empty, diffs changed blocks, updates week data, shows passive banner
-5. `catchError(() => EMPTY)` silently ignores network failures
+**`onTaskSave(event)`** — two separate paths:
+- **Fixed task** (`is_fixed: true` AND `start_time !== null`): converted to `FixedEvent`, added to `fixed_events`, rest of the day re-solved around it.
+- **Flexible task** (`is_fixed: false` OR `start_time: null`): added/updated in `flexible_tasks`, full `solveDay()` called. After solve, `ensureHighPriorityInSchedule()` runs to promote any priority ≥ 8 tasks the solver left in backlog.
+
+**`scheduleFromBacklog(dayDate, task)`** — smart scheduling from the backlog:
+1. Calls `findFreeSlot()` to search for the earliest free gap after 8:00 AM
+2. If a slot is found: opens the task editor pre-filled with that start time
+3. If no slot AND `priority ≥ 8`: forces scheduling at 9:00 AM (high-priority override)
+4. If no slot AND `priority < 8`: opens the editor without a pre-filled time
+
+**`ensureHighPriorityInSchedule(day)`** — post-solve enforcement: any task with `priority ≥ 8` that the solver left in `backlog` is force-promoted to `scheduled` using `earliest_start` or 9:00 AM as fallback.
+
+**`deadlineWarningTasks`** — computed getter that scans today's tasks for any with a `deadline` within 60 minutes of `currentMin`. Used to drive the 1-hour warning banner at the top of the calendar.
 
 ### `TaskEditorComponent`
 Standalone form component. Receives `editTask`, `dayTasks`, and `dayDate` as inputs; emits `save` (with the task data) and `cancel`.
 
-Two-phase input flow:
+Three-phase input flow:
 1. **NL parse input** at the top — user describes the task, hits →, backend parses it, form fields are pre-filled
-2. **Structured fields** — title, category, duration (with suggestion), priority, depends-on dropdown, optional constraints
+2. **Structured fields** — title, date picker, category, duration (with suggestion), priority buttons (High/Medium/Low), schedule mode toggle, depends-on dropdown, optional constraints (earliest start, latest end, deadline)
+3. **Schedule mode** — three options:
+   - `auto` (Flexible): no fixed start time, solver places the task; submits with `status: 'backlog'`, `start_time: null`
+   - `specific` (Fixed Time): user picks an exact start time; submits with `status: 'scheduled'`
+   - `backlog`: explicit backlog intent, same output as `auto`
+
+**Date validation.** A `taskDate` date-picker field lets users pick the target day. Two computed getters:
+- `isPastDate`: true if selected date is before today (ISO string comparison)
+- `isPastTime`: true if on today and selected start time has already passed the current wall clock
+
+Both validations only fire in **Fixed Time** (`scheduleMode === 'specific'`) mode. Auto/backlog tasks skip them since they have no start time. When a past time is detected, a warning banner appears with a **"Set to Now"** quick-fix button.
 
 **Duration suggestion pipeline:** `onCategoryOrDurationChange()` pushes to a `Subject`. The Subject feeds into `debounceTime(600) → distinctUntilChanged → switchMap(predictDuration)`. The response populates `prediction`. The chip appears only when `prediction.predicted_duration !== duration` and `!suggestionDismissed`. Accepting the suggestion sets `duration = prediction.predicted_duration` and dismisses the chip. Dismissing without accepting hides the chip but keeps `duration` unchanged.
+
+**Priority escalation.** In `onTaskSave()`, if the task has a `deadline` within 120 minutes of `currentMin`, its priority is automatically escalated to 9 (High) before the solver is called.
 
 ---
 
 ## 14. The Weekly Calendar — Visual Design
 
-The calendar renders as a CSS flexbox grid. The hour axis (left) is a fixed 46px column. Each day takes equal `flex: 1` width. The grid height is fixed at 1088px (17 hours × 64px per hour).
+The calendar renders as a CSS flexbox grid. The hour axis (left) is a fixed 46px column. Each day takes equal `flex: 1` width. The grid height is fixed at **1560px** (24 hours × 65px per hour) and spans the full day — midnight to midnight.
 
 ### Block Positioning
-CSS `position: absolute` within `col-body` (which is `position: relative; flex: 1`). Top and height are percentages of the column height derived from `toPosition()`. This means:
-- A 60-minute task has `heightPct = 60/1020 × 100 = 5.88%` — about 64px at full height
-- A task starting at 9 AM (540 min) has `topPct = (540-360)/1020 × 100 = 17.6%`
+CSS `position: absolute` within `col-body` (which is `position: relative; flex: 1`). Top and height are percentages of the column height derived from `toPosition()`. The grid covers 0–1440 minutes (midnight–midnight):
+- A 60-minute task has `heightPct = 60/1440 × 100 = 4.17%`
+- A task starting at 9 AM (540 min) has `topPct = 540/1440 × 100 = 37.5%`
 
-`heightPct` has a minimum of 1.5% so very short tasks are always clickable.
+`heightPct` has a minimum of 2.5% so very short tasks are always clickable.
 
-### Visual Hierarchy (five levels, visually distinct)
-1. **Fixed events** — blue left border, blue background
+### Visual Hierarchy (seven levels, visually distinct)
+1. **Fixed events** — blue left border, blue background; click to trigger disruption panel
 2. **Flexible tasks (scheduled)** — green left border, green background
 3. **Tasks with dependencies** — amber left border (instead of green)
-4. **Shifted blocks** — amber flash animation that fades over 2.5 seconds
-5. **Backlog tasks** — rendered as chips below the grid, not on the timeline
+4. **Overdue tasks** (`deadlineAtRisk`)  — red border tint + `⚠️ OVERDUE` badge
+5. **Near-deadline tasks** (`deadlineWarning`) — amber pulse + `⏰ DUE IN X MIN` badge
+6. **Shifted blocks** — amber flash animation that fades over 3 seconds (post-disruption)
+7. **Backlog tasks** — rendered as cards in the Backlog section below the grid
 
-Within backlog:
-- **Ordinary backlog** — grey chip
-- **Missed deadline (is_deadline_today=true)** — red border, "MISSED" pill, red text
+Within backlog cards:
+- **Ordinary backlog** — grey card with task title, duration, priority badge
+- **Missed deadline (`is_deadline_today=true`)** — red border, `MISSED DEADLINE` pill, red text
+- **High priority** — red `High Priority` badge
+- Each card has **🕒 Schedule** and **🗑️ Delete** action buttons
 
 ### Dependency Arrows
 An SVG overlay (`position: absolute; inset: 0; pointer-events: none`) sits on top of each `col-body`. Dependency arrows are dashed amber lines with arrowheads pointing from the bottom of the prerequisite block to the top of the dependent block. `viewBox="0 0 100 100"` with percentage coordinates means the SVG stretches with the column automatically.
 
 ---
 
-## 15. Notifications — Two Separate Channels
+## 15. Deadline Warning System
 
-FlowDay uses two visually and semantically distinct notification surfaces.
+A two-layer deadline awareness system surfaces urgency without requiring the user to scan the calendar manually.
 
-### Manual disruption toast (dark, top-right)
-Triggered by `submitDisruption()` — a user-initiated action. Dark background (`#1e293b`), auto-dismisses after 6 seconds. Each explanation line has a blue `›` bullet. Communicates: "you did something and here's what changed."
+### 1-Hour Warning Banner
+Displayed at the top of the main calendar area (above the grid scroll area) when **any task in today's schedule** has a deadline within 60 minutes of the current system clock.
 
-### Passive auto-update banner (green, bottom-right)
-Triggered by the polling loop — automatic detection. Light green background, border matches task color. Auto-dismisses after 5 seconds. Communicates: "the system noticed something and updated on your behalf." Uses `aria-live="polite"` for screen reader accessibility. Positioned bottom-right so it doesn't overlap the toast.
+- Driven by `deadlineWarningTasks` — a computed getter that scans `today`'s `flexible_tasks`
+- Updates every 30 seconds with the clock (`clockInterval`)
+- Lists all near-deadline tasks inline: `"Review notes" is due in 23 min | "Assignment" is due in 47 min`
+- Styled as `.deadline-banner` — amber/orange background with ⚠️ icon
 
-**Why two surfaces?** A single toast would be confusing — you'd see "something changed" without knowing if it was your action or the system's. Separate surfaces make the source of each notification immediately obvious.
+### Per-Block Badges
+In `buildColumn()`, each scheduled task block is evaluated:
 
----
+| Condition | Field set | Badge shown |
+|---|---|---|
+| `end_time > deadline` OR deadline passed in system clock | `deadlineAtRisk: true` | `⚠️ OVERDUE` |
+| `0 ≤ (deadline − currentMin) ≤ 60` | `deadlineWarning: true`, `minutesUntilDeadline: N` | `⏰ DUE IN N MIN` (pulsing) |
 
-## 16. The Polling System — Automatic Detection
-
-The poller runs in `WeeklyCalendarComponent` from `ngOnInit` until `ngOnDestroy`.
-
-```
-interval(60,000ms)
-  → switchMap: pick next day, get current wall time, call /schedule/check
-  → catchError: return EMPTY (silent failure)
-  → subscribe: if explanations present, diff + update + show banner
-```
-
-`switchMap` cancels any in-flight request if a new tick arrives before the previous completes. This prevents request stacking if the backend is slow.
-
-**Why rotate through days?** The demo week uses fixture dates (late September 2026). The current wall-clock time is unlikely to be within those days' bounds. Rotating through days means at least one day per 7 minutes gets checked — enough to demonstrate the feature in a demo setting. In a real app, only today's date would be polled.
-
-**What triggers a notification?** Only when the backend returns a non-empty `explanations` list. The backend returns empty explanations when nothing overran. The frontend additionally checks if any blocks actually shifted position before showing the banner — double-gating to prevent false positives.
+Both badges are mutually exclusive: overdue takes priority. Badges are rendered inside the `.block-meta-row` inside each calendar block.
 
 ---
 
-## 17. GitHub Actions — CI/CD
+## 16. Backlog Scheduling — Smart Slot Allocation
+
+The backlog section shows all tasks with `status: 'backlog'` across the entire week, sorted high-priority first.
+
+### Add Task to Backlog
+The **"+ Add Task"** button in the backlog section header calls `openGlobalTaskEditor()`. The task editor opens with `scheduleMode: 'auto'`. On submit, the task is saved with `status: 'backlog'`, `start_time: null` and sent through `solveDay()` — the solver may place it or leave it in backlog depending on available time.
+
+### Schedule Button (`scheduleFromBacklog`)
+Each backlog card has a **🕒 Schedule** button. `scheduleFromBacklog(dayDate, task)` runs:
+1. **`findFreeSlot(day, duration, deadline)`** — scans all occupied intervals (fixed events + scheduled tasks) sorted by start time. Finds the first gap ≥ `duration` minutes after 8:00 AM and before `deadline` (or `day_end`).
+2. **Free slot found** → opens task editor pre-filled with that start time in Fixed Time mode
+3. **No free slot + priority ≥ 8** → forces scheduling at 9:00 AM (high-priority tasks must appear in the schedule even if overlapping)
+4. **No free slot + priority < 8** → opens task editor without a pre-filled time; user picks manually
+
+### High-Priority Enforcement
+`ensureHighPriorityInSchedule(day)` runs after every `solveDay()` call. Any task with `priority ≥ 8` that the solver returned in `backlog` is force-promoted:
+- `start_time` set to `earliest_start` if available, else `9:00 AM` (540 min)
+- `status` set to `'scheduled'`
+
+This guarantees high-priority tasks are always visible in the calendar, even if the solver couldn't find a clean non-overlapping slot.
+
+---
+
+## 17. Notifications — Toast System
+
+FlowDay uses a single toast notification surface.
+
+### Disruption / Update Toast (dark, top-right)
+Triggered after any call to `submitDisruption()`. Dark background (`#1e293b`), auto-dismisses after 5 seconds. Each explanation line from the backend is rendered as a bullet. The toast is dismissible via an ✕ button. Communicates: "you triggered a disruption and here's what the solver changed."
+
+`showToast(lines)` is also called after `clearSchedule()` and `resetWeek()` to confirm those actions.
+
+---
+
+## 18. The Polling System — Clock Sync
+
+The frontend maintains a real-time clock via `setInterval` every 30 seconds (`clockInterval`) in `WeeklyCalendarComponent`.
+
+```
+setInterval(() => updateClock(), 30_000)
+```
+
+`updateClock()` updates:
+- `currentTimeString` — formatted as `HH:MM` (displayed in sidebar and `Today (HH:MM)` button)
+- `currentMin` — minutes since midnight (used for past-time validation, deadline warnings, and the red current-time line)
+- `currentTimeTopPct` — CSS percentage for the red "current time" indicator line on today's column
+
+**Auto-detection polling (`POST /schedule/check`)** is implemented in the backend and fully functional via the Swagger UI, but is not wired to a periodic frontend interval in the current version. The disruption panel allows manual disruption triggering from the UI. Auto-detection can be demonstrated via the `/schedule/check` endpoint directly.
+
+---
+
+## 19. GitHub Actions — CI/CD
 
 Three workflows in `.github/workflows/`:
 
@@ -588,7 +668,7 @@ Runs on every PR to `main`/`develop` regardless of which files changed. Runs bot
 
 ---
 
-## 18. The Test Suite
+## 20. The Test Suite
 
 28 tests total across two test files. Run with `pytest tests/ -v` from `backend/`.
 
@@ -634,7 +714,7 @@ All ML tests use `tmp_path` and `monkeypatch` so they never touch the real log o
 
 ---
 
-## 19. Every "What If" Scenario
+## 21. Every "What If" Scenario
 
 **What if all tasks are longer than the day?**
 `hi < lo` for every task during variable creation → no variables created → all tasks land in backlog via the "variable never created" path. No crash.
@@ -651,8 +731,11 @@ Id rank (lexicographic order) breaks the tie. The solver will always schedule th
 **What if the LLM returns malformed JSON?**
 `_parse_json_response()` raises `ValueError` with the raw response included in the message. `task_parse()` catches this and returns HTTP 422 with a clear `detail` string. The Angular form shows the error under the parse input.
 
-**What if OPENAI_API_KEY is not set?**
+**What if `GROQ_API_KEY` is not set?**
 `parse_task_text()` uses the heuristic parser. The endpoint works normally and returns `parser_used: "heuristic"`. No degraded functionality — the heuristic handles most common patterns accurately.
+
+**What if the `groq` package is not installed but `GROQ_API_KEY` is set?**
+`_llm_parse()` catches the `ImportError` and raises `RuntimeError("groq package not installed. Run: pip install groq")`. The endpoint returns HTTP 503 with that message.
 
 **What if the ML model file doesn't exist?**
 `predict_duration()` checks `MODEL_FILE.exists()`. Returns `round(estimated_duration * FALLBACK_RATIO)` (= estimated_duration unchanged with default ratio 1.0). `is_model_based: false` in the response. The frontend suggestion chip shows "No past data yet — using your estimate as-is."
@@ -672,9 +755,18 @@ The disrupt endpoints pre-validate the post-disruption event list with `validate
 **What if two requests hit `append_completion()` simultaneously?**
 The `threading.Lock` serialises the read-modify-write. One request waits while the other completes. Both entries are written correctly.
 
+**What if a task is added from the backlog with no available free slot?**
+If `priority ≥ 8`: `ensureHighPriorityInSchedule()` force-promotes it to scheduled at 9:00 AM. It will appear in the calendar even if it overlaps with another block (the overlap algorithm positions it side-by-side). If `priority < 8`: it stays in backlog.
+
+**What if the user submits the task editor with a past date?**
+In Fixed Time (`scheduleMode === 'specific'`) mode, `isPastDate` returns true and `submit()` blocks with an error message. In Auto mode, the date check is skipped — a backlog task with a past date is treated as "carry over" and is still added.
+
+**What if `localStorage` is cleared by the browser?**
+`loadMasterStorage()` returns an empty `Record`. All 7 days are initialised as empty `DaySchedule` objects (no tasks, no events). The user starts with a blank week. No crash.
+
 ---
 
-## 20. Demo Script / Checklist
+## 22. Demo Script / Checklist
 
 This is a continuous walkthrough of the entire system. No code — just what to do in what order and what to observe at each step.
 
@@ -843,4 +935,4 @@ The entire flow — from NL task creation through visual calendar rendering, man
 
 ---
 
-*Document generated: September 28, 2026. Reflects the complete FlowDay codebase as built.*
+*Document last updated: September 29, 2026. Reflects the complete FlowDay codebase including sprint updates: Groq LLM integration, deadline warning system, backlog scheduling, smart slot allocation, high-priority enforcement, date/time validation in task editor, mini month calendar sidebar, full 24-hour grid, localStorage-based persistence, and CORS deployment configuration.*
