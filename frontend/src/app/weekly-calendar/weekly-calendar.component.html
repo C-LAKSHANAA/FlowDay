@@ -43,20 +43,6 @@
       </div>
     </div>
 
-    <!-- Quick Tools & Navigation -->
-    <div class="sidebar-section">
-      <div class="section-title">Schedule Controls</div>
-      <button class="sidebar-btn primary-btn" (click)="openGlobalTaskEditor()">
-        <span class="btn-icon">➕</span> Add New Task
-      </button>
-      <button class="sidebar-btn disrupt-btn" (click)="openGlobalDisruptModal()">
-        <span class="btn-icon">⚡</span> Trigger Disruption
-      </button>
-      <button class="sidebar-btn clear-btn" (click)="clearSchedule()">
-        <span class="btn-icon">🗑️</span> Clear All Tasks
-      </button>
-    </div>
-
     <!-- Legend & Stats -->
     <div class="sidebar-stats" *ngIf="week">
       <div class="section-title">Overview</div>
@@ -94,7 +80,6 @@
     <header class="app-header" (click)="$event.stopPropagation()">
       <div class="header-left">
         <h1 *ngIf="week">Week View ({{ shortDate(week.week_start_date) }})</h1>
-        <p class="subtitle">00:00 – 12:00 PM visible initially, scroll down for rest of the day</p>
       </div>
 
       <div class="header-actions">
@@ -103,9 +88,6 @@
         </button>
         <button class="btn-disrupt-header" (click)="openGlobalDisruptModal()">
           <span>⚡</span> Disrupt
-        </button>
-        <button class="btn-secondary" (click)="resetWeek()" title="Reset to template">
-          🔄 Reset Template
         </button>
         <button class="btn-clear" (click)="clearSchedule()" title="Clear all tasks">
           🗑️ Clear Schedule
@@ -125,6 +107,17 @@
       <ul class="toast-list">
         <li *ngFor="let line of explanations">{{ line }}</li>
       </ul>
+    </div>
+
+    <!-- ── 1-Hour Deadline Warning Banner ──────────────────────── -->
+    <div class="deadline-banner" *ngIf="deadlineWarningTasks.length > 0">
+      <span class="banner-icon">⚠️</span>
+      <div class="banner-text">
+        <strong>1-HOUR DEADLINE WARNING:</strong>
+        <span *ngFor="let item of deadlineWarningTasks; let last = last">
+          "{{ item.title }}" is due in <strong>{{ item.minutesLeft }} min</strong>{{ last ? '' : ' | ' }}
+        </span>
+      </div>
     </div>
 
     <!-- ── Scrollable Calendar Grid (00:00 - 12:00 Visible Initially) ── -->
@@ -206,6 +199,7 @@
               [class.block-shifted]="changedBlockIds.has(block.id)"
               [class.block-clickable]="block.kind === 'fixed'"
               [class.block-overdue]="block.deadlineAtRisk"
+              [class.block-warning]="block.deadlineWarning"
               [style.top.%]="block.topPct"
               [style.height.%]="block.heightPct"
               [style.left.%]="block.leftPct"
@@ -234,6 +228,7 @@
                     {{ getPriorityLabel(block.priority) }}
                   </span>
                   <span class="deadline-warning" *ngIf="block.deadlineAtRisk">⚠️ OVERDUE</span>
+                  <span class="deadline-urgent" *ngIf="block.deadlineWarning">⏰ DUE IN {{ block.minutesUntilDeadline }} MIN</span>
                 </div>
               </div>
             </div>
@@ -285,6 +280,15 @@
     <!-- ── Task Editor Modal ──────────────────────────────────── -->
     <div class="panel-backdrop" *ngIf="taskEditorDay" (click)="closeTaskEditor()"></div>
     <div class="task-editor-wrapper" *ngIf="taskEditorDay" (click)="$event.stopPropagation()">
+
+      <!-- Day selector (shown when opened from global Add Task button) -->
+      <div class="editor-day-picker" *ngIf="!taskEditorTask">
+        <label>Day</label>
+        <select [ngModel]="taskEditorDay" (ngModelChange)="taskEditorDay = $event">
+          <option *ngFor="let d of weekDays" [value]="d.date">{{ d.label }}</option>
+        </select>
+      </div>
+
       <app-task-editor
         [editTask]="taskEditorTask"
         [dayTasks]="editorDayTasks()"
@@ -339,8 +343,8 @@
           <div class="card-actions">
             <button
               class="btn-card-schedule"
-              (click)="openTaskEditor(entry.dayDate, entry.task)"
-              title="Set time or auto-schedule this task"
+              (click)="scheduleFromBacklog(entry.dayDate, entry.task)"
+              title="Auto-allot free slot or set time for this task"
             >
               🕒 Schedule
             </button>

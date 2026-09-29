@@ -23,6 +23,9 @@ Endpoints:
 
 from typing import Literal, Optional
 
+from dotenv import load_dotenv
+load_dotenv()  # loads backend/.env into os.environ before anything else
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -418,7 +421,7 @@ def task_parse(body: TaskParseRequest):
 
     Raises HTTP 422 if the LLM returns malformed JSON.
     """
-    parser_used = "llm" if __import__("os").environ.get("OPENAI_API_KEY") else "heuristic"
+    parser_used = "llm" if __import__("os").environ.get("GROQ_API_KEY") else "heuristic"
 
     try:
         result = parse_task_text(body.text)

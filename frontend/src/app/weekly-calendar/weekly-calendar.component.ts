@@ -336,7 +336,9 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
 
   openGlobalTaskEditor(): void {
     if (!this.week || this.week.days.length === 0) return;
-    this.openTaskEditor(this.week.days[0].date, null);
+    // Default to today if it's in the week, otherwise first day
+    const todayDay = this.week.days.find(d => d.date === this.todayDateStr);
+    this.openTaskEditor((todayDay ?? this.week.days[0]).date, null);
   }
 
   closeTaskEditor(): void {
@@ -372,14 +374,16 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
 
       this.svc.solveDay(updatedDay).subscribe({
         next: (solved) => {
-          const finalDays = this.week!.days.map((d, i) => i === dayIndex ? solved : d);
+          const finalSolved = this.ensureHighPriorityInSchedule(solved);
+          const finalDays = this.week!.days.map((d, i) => i === dayIndex ? finalSolved : d);
           this.week = { ...this.week!, days: finalDays };
           this.saveMasterStorage();
           this.dayColumns = this.week.days.map((d, i) => this.buildColumn(d, i));
           this.closeTaskEditor();
         },
         error: () => {
-          const finalDays = this.week!.days.map((d, i) => i === dayIndex ? updatedDay : d);
+          const finalUpdated = this.ensureHighPriorityInSchedule(updatedDay);
+          const finalDays = this.week!.days.map((d, i) => i === dayIndex ? finalUpdated : d);
           this.week = { ...this.week!, days: finalDays };
           this.saveMasterStorage();
           this.dayColumns = this.week.days.map((d, i) => this.buildColumn(d, i));
@@ -412,7 +416,8 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
 
     this.svc.solveDay(updatedDay).subscribe({
       next: (solved) => {
-        const finalDays = this.week!.days.map((d, i) => i === dayIndex ? solved : d);
+        const finalSolved = this.ensureHighPriorityInSchedule(solved);
+        const finalDays = this.week!.days.map((d, i) => i === dayIndex ? finalSolved : d);
         this.week = { ...this.week!, days: finalDays };
         this.saveMasterStorage();
         this.dayColumns = this.week.days.map((d, i) => this.buildColumn(d, i));
@@ -420,13 +425,88 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
       },
       error: (e) => {
         console.error('Solve failed:', e.error?.detail ?? e.message);
-        const finalDays = this.week!.days.map((d, i) => i === dayIndex ? updatedDay : d);
+        const finalUpdated = this.ensureHighPriorityInSchedule(updatedDay);
+        const finalDays = this.week!.days.map((d, i) => i === dayIndex ? finalUpdated : d);
         this.week = { ...this.week!, days: finalDays };
         this.saveMasterStorage();
         this.dayColumns = this.week.days.map((d, i) => this.buildColumn(d, i));
         this.closeTaskEditor();
       },
     });
+  }
+
+  scheduleFromBacklog(dayDate: string, task: FlexibleTask): void {
+    if (!this.week) return;
+    const day = this.week.days.find(d => d.date === dayDate);
+    if (!day) {
+      this.openTaskEditor(dayDate, task);
+      return;
+    }
+
+    const freeSlot = this.findFreeSlot(day, task.duration, task.deadline);
+    if (freeSlot !== null) {
+      const scheduledTask: FlexibleTask = {
+        ...task,
+        start_time: freeSlot,
+        status: 'scheduled',
+      };
+      this.openTaskEditor(dayDate, scheduledTask);
+    } else {
+      if (task.priority >= 8) {
+        const scheduledTask: FlexibleTask = {
+          ...task,
+          start_time: task.start_time ?? 540,
+          status: 'scheduled',
+        };
+        this.openTaskEditor(dayDate, scheduledTask);
+      } else {
+        this.openTaskEditor(dayDate, task);
+      }
+    }
+  }
+
+  findFreeSlot(day: DaySchedule, duration: number, deadline?: number | null): number | null {
+    const occupied: { start: number; end: number }[] = [];
+    for (const fe of day.fixed_events) {
+      occupied.push({ start: fe.start_time, end: fe.end_time });
+    }
+    for (const ft of day.flexible_tasks) {
+      if (ft.status === 'scheduled' && ft.start_time !== null) {
+        occupied.push({ start: ft.start_time, end: ft.start_time + (ft.actual_duration ?? ft.duration) });
+      }
+    }
+    occupied.sort((a, b) => a.start - b.start);
+
+    const maxEnd = (deadline != null && deadline > day.day_start) ? Math.min(deadline, day.day_end) : day.day_end;
+    let cursor = Math.max(day.day_start, 480);
+
+    for (const iv of occupied) {
+      if (iv.end <= cursor) continue;
+      if (iv.start >= cursor + duration && iv.start <= maxEnd) {
+        return cursor;
+      }
+      cursor = Math.max(cursor, iv.end);
+    }
+
+    if (cursor + duration <= maxEnd) {
+      return cursor;
+    }
+    return null;
+  }
+
+  private ensureHighPriorityInSchedule(day: DaySchedule): DaySchedule {
+    const updatedTasks = day.flexible_tasks.map(t => {
+      if (t.priority >= 8 && t.status === 'backlog') {
+        const fallbackStart = t.start_time !== null ? t.start_time : (t.earliest_start !== null ? t.earliest_start : 540);
+        return {
+          ...t,
+          start_time: fallbackStart,
+          status: 'scheduled' as const,
+        };
+      }
+      return t;
+    });
+    return { ...day, flexible_tasks: updatedTasks };
   }
 
   deleteBlock(dayDate: string, blockId: string): void {
@@ -573,6 +653,17 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
         const end = task.start_time + dur;
         // Overdue check: if task end_time > deadline OR if deadline passed relative to system clock
         const deadlineAtRisk = task.deadline != null && (end > task.deadline || (day.date === this.todayDateStr && this.currentMin > task.deadline));
+
+        let deadlineWarning = false;
+        let minutesUntilDeadline: number | undefined = undefined;
+        if (task.deadline != null && day.date === this.todayDateStr) {
+          const diff = task.deadline - this.currentMin;
+          if (diff >= 0 && diff <= 60) {
+            deadlineWarning = true;
+            minutesUntilDeadline = diff;
+          }
+        }
+
         blocks.push({
           id: task.id, title: task.title,
           start_time: task.start_time, end_time: end,
@@ -581,6 +672,8 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
           depends_on: task.depends_on,
           deadline: task.deadline,
           deadlineAtRisk,
+          deadlineWarning,
+          minutesUntilDeadline,
           ...this.toPosition(task.start_time, end),
         });
       } else {
@@ -715,6 +808,14 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
     return 'Low';
   }
 
+  get weekDays(): { date: string; label: string }[] {
+    if (!this.week) return [];
+    return this.week.days.map(d => ({
+      date: d.date,
+      label: `${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][this.week!.days.indexOf(d)]} ${this.shortDate(d.date)}`,
+    }));
+  }
+
   get totalScheduledCount(): number {
     if (!this.week) return 0;
     return this.week.days.reduce((acc, d) =>
@@ -728,6 +829,23 @@ export class WeeklyCalendarComponent implements OnInit, OnDestroy {
 
   missedCount(): number {
     return this.allBacklog().filter(e => e.missed).length;
+  }
+
+  get deadlineWarningTasks(): { title: string; dayDate: string; minutesLeft: number }[] {
+    if (!this.week) return [];
+    const result: { title: string; dayDate: string; minutesLeft: number }[] = [];
+    const todayDay = this.week.days.find(d => d.date === this.todayDateStr);
+    if (!todayDay) return [];
+
+    for (const t of todayDay.flexible_tasks) {
+      if (t.deadline != null) {
+        const diff = t.deadline - this.currentMin;
+        if (diff >= 0 && diff <= 60) {
+          result.push({ title: t.title, dayDate: todayDay.date, minutesLeft: diff });
+        }
+      }
+    }
+    return result;
   }
 
   // ── Template Helpers ───────────────────────────────────────────────────

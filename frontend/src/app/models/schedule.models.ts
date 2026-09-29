@@ -62,6 +62,8 @@ export interface CalendarBlock {
   depends_on?: string | null;
   deadline?: number | null;
   deadlineAtRisk?: boolean;  // true if end_time > deadline
+  deadlineWarning?: boolean; // true if deadline is within 1 hour
+  minutesUntilDeadline?: number;
   // CSS values, computed from time
   topPct: number;
   heightPct: number;

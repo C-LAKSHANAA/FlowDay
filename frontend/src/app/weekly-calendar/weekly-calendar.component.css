@@ -678,6 +678,44 @@
   border-radius: 3px;
 }
 
+.deadline-urgent {
+  font-size: 0.58rem;
+  font-weight: 900;
+  color: #ffffff;
+  background: #d97706;
+  padding: 1px 5px;
+  border-radius: 3px;
+  animation: pulse-badge 1.5s infinite alternate;
+}
+@keyframes pulse-badge {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(1.05); opacity: 1; box-shadow: 0 0 8px rgba(217, 119, 6, 0.8); }
+}
+
+.block-warning {
+  border-left: 5px solid #d97706 !important;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.4) !important;
+}
+
+/* ── 1-Hour Deadline Warning Banner ── */
+.deadline-banner {
+  background: #fffbeeb0;
+  border: 1px solid #fcd34d;
+  border-left: 5px solid #d97706;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #78350f;
+  font-size: 0.82rem;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.12);
+  backdrop-filter: blur(4px);
+}
+.banner-icon { font-size: 1.1rem; }
+.banner-text { font-size: 0.82rem; line-height: 1.4; }
+
 
 /* ── Modal Backdrops & Panels ────────────────────────────────── */
 .panel-backdrop {
@@ -747,6 +785,38 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 101;
+}
+
+/* Day picker above task editor */
+.editor-day-picker {
+  background: #fdfbf7;
+  border: 1px solid #e5dcce;
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #5d4037;
+}
+.editor-day-picker label {
+  white-space: nowrap;
+}
+.editor-day-picker select {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid #d7ccc8;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: #fff;
+  color: #3c2e28;
+}
+/* When day-picker is shown, remove top radius from the editor card */
+.editor-day-picker + app-task-editor .task-editor {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* Toast */

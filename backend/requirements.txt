@@ -5,4 +5,5 @@ pydantic
 pytest
 scikit-learn
 joblib
-httpx2
+python-dotenv
+groq

@@ -40,6 +40,11 @@
     </div>
 
     <div class="field-row">
+      <label>Date</label>
+      <input type="date" [(ngModel)]="taskDate" (ngModelChange)="pastTimeError = ''" />
+    </div>
+
+    <div class="field-row">
       <label>Category</label>
       <input type="text" [(ngModel)]="category"
              placeholder="e.g. reading, assignment"
@@ -116,9 +121,9 @@
       </div>
     </div>
 
-    <div class="past-time-alert" *ngIf="isPastTime || pastTimeError">
-      ⚠️ <span>Selected time has already passed according to system clock!</span>
-      <button type="button" class="btn-fix-time" (click)="setCurrentTime()">Set to Now</button>
+    <div class="past-time-alert" *ngIf="isPastDate || isPastTime || pastTimeError">
+      ⚠️ <span>{{ pastTimeError || (isPastDate ? 'Selected date has already passed! Please choose today or a future date.' : 'Selected start time has already passed according to system clock!') }}</span>
+      <button type="button" class="btn-fix-time" *ngIf="isPastTime && !isPastDate" (click)="setCurrentTime()">Set to Now</button>
     </div>
 
     <!-- Direct Deadline Input -->

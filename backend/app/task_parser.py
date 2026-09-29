@@ -5,12 +5,14 @@ Parse a free-text task description into a structured FlexibleTask-shaped dict.
 
 Two modes
 ---------
-LLM mode (when OPENAI_API_KEY env var is set)
-    Calls the OpenAI chat completions API with a strict JSON-only prompt.
-    Returns a dict with only the fields the LLM can confidently infer.
+LLM mode (when GROQ_API_KEY env var is set)
+    Calls the Groq chat completions API (qwen/qwen3.8-27b) with a
+    strict JSON-only prompt.  Returns a dict with only the fields the LLM
+    can confidently infer.
 
 Heuristic mode (default / cold start / no API key)
     A lightweight rule-based extractor that handles the most common patterns:
+    - Time range: "from 11am to 5pm", "10:00am-11:30am"
     - Duration: "30 min", "1 hour", "45 minutes", "2h"
     - Deadline: "today", "tomorrow", "by 3pm", "before 5:30"
     - Priority: "urgent", "important", "low priority", "asap"
@@ -88,16 +90,44 @@ def _heuristic_parse(text: str) -> dict[str, Any]:
 
     lower = t.lower()
 
-    # ── Duration ────────────────────────────────────────────────────────
-    dur_match = re.search(
-        r"(\d+(?:\.\d+)?)\s*(?:hour|hr|h)\b|(\d+)\s*(?:min(?:ute)?s?)\b",
+    # ── Helper: parse a time expression like "11am", "5pm", "11:30am", "17:00" ──
+    def _parse_time_expr(h_str: str, m_str: str | None, mer: str | None) -> int:
+        h = int(h_str)
+        m = int(m_str) if m_str else 0
+        if mer == "pm" and h < 12:
+            h += 12
+        elif mer == "am" and h == 12:
+            h = 0
+        return h * 60 + m
+
+    # ── Range: "from 11am to 5pm", "11:00am to 5pm", "11am-5pm" ────────
+    range_match = re.search(
+        r"(?:from\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)",
         lower,
     )
-    if dur_match:
-        if dur_match.group(1):
-            result["duration"] = round(float(dur_match.group(1)) * 60)
-        else:
-            result["duration"] = int(dur_match.group(2))
+    if range_match:
+        start_min = _parse_time_expr(
+            range_match.group(1), range_match.group(2), range_match.group(3)
+        )
+        end_min = _parse_time_expr(
+            range_match.group(4), range_match.group(5), range_match.group(6)
+        )
+        if end_min > start_min:
+            result["earliest_start"] = start_min
+            result["latest_end"]     = end_min
+            result["duration"]       = end_min - start_min
+
+    # ── Duration (only if not already set by range) ─────────────────────
+    if result["duration"] is None:
+        dur_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*(?:hour|hr|h)\b|(\d+)\s*(?:min(?:ute)?s?)\b",
+            lower,
+        )
+        if dur_match:
+            if dur_match.group(1):
+                result["duration"] = round(float(dur_match.group(1)) * 60)
+            else:
+                result["duration"] = int(dur_match.group(2))
 
     # ── Deadline (same-day only) ─────────────────────────────────────────
     # "today", "by 3pm", "before 5:30", "due at 14:00"
@@ -167,23 +197,23 @@ def _heuristic_parse(text: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# LLM parser
+# LLM parser (Groq)
 # ---------------------------------------------------------------------------
 
 def _llm_parse(text: str) -> dict[str, Any]:
-    """Call OpenAI chat completions and parse the JSON response."""
+    """Call Groq chat completions and parse the JSON response."""
     try:
-        import openai  # type: ignore[import]
+        from groq import Groq  # type: ignore[import]
     except ImportError:
         raise RuntimeError(
-            "openai package not installed. "
-            "Run: pip install openai"
+            "groq package not installed. "
+            "Run: pip install groq"
         )
 
-    client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="qwen/qwen3.8-27b",
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user",   "content": text},
@@ -244,16 +274,16 @@ def parse_task_text(text: str) -> dict[str, Any]:
     """
     Parse a free-text task description into structured fields.
 
-    Uses the LLM path when OPENAI_API_KEY is set, otherwise falls back to
-    the heuristic parser.  Both paths return the same dict schema.
+    Uses the Groq LLM path when GROQ_API_KEY is set, otherwise falls back
+    to the heuristic parser.  Both paths return the same dict schema.
 
     Raises ValueError with a clear message on malformed LLM responses.
     """
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    api_key = os.environ.get("GROQ_API_KEY", "").strip()
 
     if api_key:
-        log.info("parse_task_text: using LLM parser")
+        log.info("parse_task_text: using Groq LLM parser")
         return _llm_parse(text)
     else:
-        log.info("parse_task_text: using heuristic parser (no OPENAI_API_KEY set)")
+        log.info("parse_task_text: using heuristic parser (no GROQ_API_KEY set)")
         return _heuristic_parse(text)
